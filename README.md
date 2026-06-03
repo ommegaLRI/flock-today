@@ -1,20 +1,20 @@
-# Stitch
+# Flock
 
-Stitch is an open-source system for migrating simple marketing pages into portable React campaign sites, then letting the generated site carry its own private editing, feedback, patching, history, and publishing workflow.
+Flock is an open-source system for migrating simple marketing pages into portable React campaign sites, then letting the generated site carry its own private editing, feedback, patching, history, and publishing workflow.
 
 ## Current architecture
 
 ```text
 Private migration endpoint
   → MigrationBootstrap
-  → open-source Stitch ingestion
-  → StitchProject
+  → open-source Flock ingestion
+  → FlockProject
   → install plan + file tree
   → portable React campaign bundle
   → private capsule / review runtime / deploy handoff
 ```
 
-The private migration endpoint can be smart: crawling, screenshots, asset extraction, model-heavy interpretation, and high-fidelity normalization. The open-source project owns the durable handoff after that point. The handoff artifact is an open `MigrationBootstrap`, so users are not locked into a hosted Stitch workspace.
+The private migration endpoint can be smart: crawling, screenshots, asset extraction, model-heavy interpretation, and high-fidelity normalization. The open-source project owns the durable handoff after that point. The handoff artifact is an open `MigrationBootstrap`, so users are not locked into a hosted Flock workspace.
 
 ## Phase progression
 
@@ -26,9 +26,9 @@ The private migration endpoint can be smart: crawling, screenshots, asset extrac
 6. **Contract-constrained inference** — models propose structured `SpecOperation[]`; the kernel validates every operation.
 7. **Project state and provenance** — user-owned event log, snapshots, undo foundation, and bundle provenance.
 8. **User-owned feedback transport** — portable feedback bundles via download, email, GitHub issue URL, or user-owned POST endpoint.
-9. **Migration bootstrap ingestion** — private migration returns an open bootstrap payload; open-source Stitch validates, ingests, and compiles it.
-10. **Bootstrap-to-site installer** — a bootstrap becomes a complete `StitchProject` with a root folder, manifest, install plan, file roles, next actions, and portable project files.
-11. **Real export artifact** — a `StitchProject` becomes a concrete, profile-aware `ExportArtifact` with file inclusion, privacy summary, validation, receipt, and download-ready metadata.
+9. **Migration bootstrap ingestion** — private migration returns an open bootstrap payload; open-source Flock validates, ingests, and compiles it.
+10. **Bootstrap-to-site installer** — a bootstrap becomes a complete `FlockProject` with a root folder, manifest, install plan, file roles, next actions, and portable project files.
+11. **Real export artifact** — a `FlockProject` becomes a concrete, profile-aware `ExportArtifact` with file inclusion, privacy summary, validation, receipt, and download-ready metadata.
 
 ## Core loop
 
@@ -36,8 +36,8 @@ The private migration endpoint can be smart: crawling, screenshots, asset extrac
 Capture / private migration
 → MigrationBootstrap
 → validate + ingest
-→ StitchProjectState
-→ StitchProject install plan
+→ FlockProjectState
+→ FlockProject install plan
 → CampaignPageSpec
 → profile-aware portable bundle
 → concrete ExportArtifact
@@ -59,11 +59,11 @@ Capture / private migration
 
 The migration endpoint may be private, but its output is not. `MigrationBootstrap` is an open handoff artifact containing the design-contract version, brand spec, campaign page spec, content strategy, migration report, assets, integrations, source provenance, warnings, and recommended build profile.
 
-From that point forward, the generated site/repo owns the workflow. Stitch does not need to host project state, feedback, previews, or publishing.
+From that point forward, the generated site/repo owns the workflow. Flock does not need to host project state, feedback, previews, or publishing.
 
 ## Phase 10 install boundary
 
-`MigrationBootstrap` is the portable handoff from the private migration endpoint. `StitchProject` is the installed, user-owned result. It answers:
+`MigrationBootstrap` is the portable handoff from the private migration endpoint. `FlockProject` is the installed, user-owned result. It answers:
 
 - which root directory should be written,
 - which files are canonical versus generated,
@@ -77,7 +77,7 @@ The installer still does not create a zip, GitHub repo, or provider deployment. 
 
 ## Phase 11 export artifact boundary
 
-`StitchProject` is now exportable as a concrete `ExportArtifact`. An export artifact is still user-owned and provider-neutral, but it is more than a plan: it contains the included files, byte counts, privacy summary, validation result, receipt, download filename, and next actions.
+`FlockProject` is now exportable as a concrete `ExportArtifact`. An export artifact is still user-owned and provider-neutral, but it is more than a plan: it contains the included files, byte counts, privacy summary, validation result, receipt, download filename, and next actions.
 
 Export profiles make privacy explicit:
 
@@ -102,13 +102,13 @@ The lifecycle is now:
 ```text
 Private migration endpoint
 → MigrationBootstrap
-→ StitchProject
+→ FlockProject
 → ExportArtifact
 → DeployPackage
 → user-owned hosting account
 ```
 
-The deploy package makes hosting practical without turning Stitch into a host. Real provider API deployment, GitHub repo creation, OAuth, domains, and build logs remain later phases.
+The deploy package makes hosting practical without turning Flock into a host. Real provider API deployment, GitHub repo creation, OAuth, domains, and build logs remain later phases.
 
 ## Phase 13 capability-gated capsule access
 
@@ -141,14 +141,14 @@ The lifecycle is now:
 ```text
 Private migration endpoint
 → MigrationBootstrap
-→ StitchProject
+→ FlockProject
 → ExportArtifact
 → MaterializedArtifact
 → DeployPackage
 → user-owned hosting account
 ```
 
-Phase 14 intentionally uses a simple `stitchBundleJson` format first. It is download-ready and deterministic, while binary ZIP compression remains an adapter concern for a later phase. This keeps ownership real without adding hosting, OAuth, provider uploads, or deployment state.
+Phase 14 intentionally uses a simple `FlockBundleJson` format first. It is download-ready and deterministic, while binary ZIP compression remains an adapter concern for a later phase. This keeps ownership real without adding hosting, OAuth, provider uploads, or deployment state.
 
 Materialization preserves the privacy rules introduced earlier:
 
