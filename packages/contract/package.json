@@ -1,0 +1,9 @@
+{
+  "name": "@stitch/contract",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Canonical design contract, campaign specs, and shared protocol types.",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

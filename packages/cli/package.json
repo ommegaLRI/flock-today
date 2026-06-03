@@ -1,0 +1,9 @@
+{
+  "name": "@stitch/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Thin command planning layer for advanced local flows.",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

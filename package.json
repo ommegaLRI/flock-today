@@ -1,0 +1,19 @@
+{
+  "name": "stitch",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Open-source campaign-site migration, design-contract generation, and private site capsule tooling.",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "tsc -p tsconfig.json",
+    "check": "npm run typecheck"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  }
+}

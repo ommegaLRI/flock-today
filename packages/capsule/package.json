@@ -1,0 +1,9 @@
+{
+  "name": "@stitch/capsule",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Site-carried private workbench and review runtime primitives.",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}
