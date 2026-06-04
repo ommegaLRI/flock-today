@@ -942,45 +942,374 @@ export type ReviewSubmissionReceipt = {
 
 
 
-export type SourceProvenance = {
-  sourceKind: "url" | "html" | "capture" | "manual" | "private-migration-endpoint";
-  originalUrl?: string;
-  capturedAt?: ISODateString;
-  migratedAt?: ISODateString;
-  migrationEndpoint?: string;
-  inputHash?: string;
-  screenshotRefs?: string[];
+export type BootstrapColorToken = {
+  value: string;
+  role: string;
+  confidence: number;
+  sourceRefs?: Id[];
+};
+
+export type BootstrapFontToken = {
+  family: string;
+  fallback?: string;
+  confidence: number;
+  sourceRefs?: Id[];
+};
+
+export type BootstrapBrandSpec = {
+  name?: string;
+  logoAssetId?: Id;
+  colors: {
+    canvas?: BootstrapColorToken;
+    surface?: BootstrapColorToken;
+    surfaceAlt?: BootstrapColorToken;
+    text?: BootstrapColorToken;
+    mutedText?: BootstrapColorToken;
+    brand?: BootstrapColorToken;
+    accent?: BootstrapColorToken;
+    border?: BootstrapColorToken;
+  };
+  typography: {
+    headingFont?: BootstrapFontToken;
+    bodyFont?: BootstrapFontToken;
+    monospaceFont?: BootstrapFontToken;
+    scale?: "compact" | "standard" | "large" | "display";
+  };
+  shape: {
+    radius?: "none" | "sm" | "md" | "lg" | "xl" | "pill";
+    cardStyle?: "flat" | "bordered" | "shadowed" | "elevated";
+  };
+  spacing: {
+    density?: "compact" | "standard" | "spacious";
+    sectionGap?: "sm" | "md" | "lg" | "xl";
+  };
+  visualPersonality?: Array<"minimal" | "technical" | "premium" | "playful" | "corporate" | "editorial" | "bold" | "friendly" | "luxury" | "startup">;
+  voice?: {
+    tone?: string[];
+    notes?: string;
+  };
+};
+
+export type BootstrapGoal = "bookCall" | "startTrial" | "buy" | "signup" | "download" | "contact" | "learnMore" | "unknown";
+
+export type BootstrapCta = {
+  id: Id;
+  label: string;
+  href?: string;
+  role: "primary" | "secondary" | "tertiary";
+  intent?: BootstrapGoal;
+  preserveHref: boolean;
+  sourceRefs?: Id[];
+  confidence: number;
+};
+
+export type BootstrapTextField = {
+  value: string;
+  sourceRefs?: Id[];
+  confidence: number;
+};
+
+export type BootstrapImageRef = {
+  assetId: Id;
+  alt?: string;
+  role?: "logo" | "heroMedia" | "icon" | "avatar" | "customerLogo" | "background";
+  sourceRefs?: Id[];
+  confidence: number;
+};
+
+export type BootstrapContentStrategy = {
+  audience?: string;
+  offer?: string;
+  primaryGoal: BootstrapGoal;
+  primaryCta?: BootstrapCta;
+  secondaryCtas?: BootstrapCta[];
+  promise?: string;
+  painPoints?: string[];
+  proofPoints?: string[];
+  objections?: string[];
+  trustSignals?: Array<{
+    type: "logoCloud" | "testimonial" | "stat" | "rating" | "press" | "certification" | "caseStudy";
+    label?: string;
+    sectionId?: Id;
+    confidence: number;
+  }>;
+  confidence: number;
+};
+
+export type BootstrapSectionType = "Nav" | "Hero" | "LogoCloud" | "FeatureGrid" | "Stats" | "Testimonials" | "Pricing" | "FAQ" | "FinalCTA" | "Footer" | "Form" | "Embed" | "UnknownSection";
+
+export type BootstrapSectionContent = Record<string, unknown> & {
+  eyebrow?: BootstrapTextField | string;
+  headline?: BootstrapTextField | string;
+  heading?: BootstrapTextField | string;
+  subheadline?: BootstrapTextField | string;
+  body?: BootstrapTextField | string;
+  primaryCta?: BootstrapCta;
+  secondaryCta?: BootstrapCta;
+  media?: BootstrapImageRef;
+  items?: Array<Record<string, unknown>>;
+  links?: BootstrapCta[];
+};
+
+export type BootstrapCampaignSection = {
+  id: Id;
+  type: BootstrapSectionType;
+  label?: string;
+  role?: "navigation" | "hero" | "proof" | "education" | "conversion" | "footer";
+  variant?: string;
+  layout: {
+    recipe: string;
+    container?: "narrow" | "standard" | "wide" | "full";
+    alignment?: "left" | "center" | "right" | "split" | "grid";
+    density?: "compact" | "standard" | "spacious";
+  };
+  content: BootstrapSectionContent;
+  styleRefs?: Id[];
+  assetRefs?: Id[];
+  sourceRefs: Id[];
+  confidence: number;
+  warnings?: BootstrapWarning[];
+};
+
+export type BootstrapResponsiveSummary = {
+  sectionOrder?: Id[];
+  hiddenSectionIds?: Id[];
   notes?: string[];
 };
 
+export type BootstrapCampaignPageSpec = {
+  id: Id;
+  type: "singlePageCampaign";
+  route: "/" | string;
+  title?: string;
+  description?: string;
+  sections: BootstrapCampaignSection[];
+  globalCtas?: BootstrapCta[];
+  responsive?: {
+    desktop: BootstrapResponsiveSummary;
+    mobile?: BootstrapResponsiveSummary;
+  };
+};
+
 export type AssetManifest = {
-  assets: Array<{
+  items: Array<{
     id: Id;
-    url: string;
-    type: "image" | "font" | "script" | "style" | "video" | "unknown";
-    role?: "logo" | "hero" | "icon" | "testimonial" | "background" | "generic";
+    type: "image" | "logo" | "icon" | "font" | "video" | "favicon" | "unknown";
+    usage: "brandLogo" | "heroMedia" | "sectionImage" | "customerLogo" | "testimonialAvatar" | "icon" | "background" | "font" | "metadata" | "unknown";
+    originalUrl?: string;
+    resolvedUrl?: string;
+    storageRef?: string;
     alt?: string;
-    localPath?: string;
-    requiresDownload?: boolean;
+    dimensions?: { width?: number; height?: number };
+    mimeType?: string;
+    hash?: string;
+    sectionRefs?: Id[];
+    sourceRefs?: Id[];
+    migrationPolicy: "preserve" | "replace" | "requiresReview" | "unsupported";
+    confidence: number;
+    warnings?: BootstrapWarning[];
   }>;
-  warnings: string[];
+};
+
+export type BootstrapFormIntegration = {
+  id: Id;
+  sectionId?: Id;
+  provider: "native" | "hubspot" | "typeform" | "calendly" | "mailchimp" | "marketo" | "custom" | "unknown";
+  action?: string;
+  method?: "GET" | "POST" | "unknown";
+  fields: Array<{ name?: string; label?: string; type?: string; required?: boolean }>;
+  submitLabel?: string;
+  migrationPolicy: "preserve" | "requiresReview" | "unsupported";
+  risk: "low" | "medium" | "high";
+  sourceRefs?: Id[];
+  confidence: number;
+};
+
+export type BootstrapScriptIntegration = {
+  id: Id;
+  provider: "ga4" | "gtm" | "plausible" | "posthog" | "segment" | "metaPixel" | "linkedinInsight" | "hotjar" | "hubspot" | "intercom" | "unknown";
+  category: "analytics" | "pixel" | "embed" | "chat" | "form" | "unknown";
+  migrationPolicy: "detectOnly" | "preserve" | "requiresReview" | "unsupported";
+  sourceRefs?: Id[];
+  confidence: number;
+};
+
+export type BootstrapEmbedIntegration = {
+  id: Id;
+  provider?: string;
+  sourceUrl?: string;
+  sectionId?: Id;
+  migrationPolicy: "preserve" | "requiresReview" | "unsupported";
+  risk: "low" | "medium" | "high";
+  sourceRefs?: Id[];
+  confidence: number;
+};
+
+export type BootstrapIntegrationManifest = {
+  forms: BootstrapFormIntegration[];
+  embeds: BootstrapEmbedIntegration[];
+  analytics: BootstrapScriptIntegration[];
+  pixels: BootstrapScriptIntegration[];
+  otherScripts: BootstrapScriptIntegration[];
+  warnings?: BootstrapWarning[];
+};
+
+export type SeoMetadata = {
+  title?: string;
+  description?: string;
+  canonicalUrl?: string;
+  robots?: string;
+  openGraph?: {
+    title?: string;
+    description?: string;
+    imageAssetId?: Id;
+    url?: string;
+    type?: string;
+  };
+  twitter?: {
+    card?: string;
+    title?: string;
+    description?: string;
+    imageAssetId?: Id;
+  };
+  structuredData?: Array<{
+    type?: string;
+    summary: string;
+    migrationPolicy: "preserve" | "requiresReview" | "unsupported";
+  }>;
+  sourceRefs?: Id[];
+  confidence: number;
+};
+
+export type SourceProvenance = {
+  refs: Array<{
+    id: Id;
+    kind: "vision" | "dom" | "computedStyle" | "asset" | "link" | "form" | "script" | "seo" | "manual" | "inferred";
+    viewport?: "desktop" | "mobile" | "tablet";
+    selector?: string;
+    bbox?: Rect;
+    textHash?: string;
+    valueHash?: string;
+    confidence: number;
+    notes?: string;
+  }>;
+};
+
+export type BootstrapWarning = {
+  id: Id;
+  severity: "info" | "warning" | "error" | "blocked";
+  code: string;
+  message: string;
+  path?: string;
+  sourceRefs?: Id[];
+};
+
+export type BootstrapMigrationReport = {
+  readiness: "excellent" | "good" | "fair" | "poor" | "unsupported";
+  score: number;
+  summary: string;
+  preserved: string[];
+  normalized: string[];
+  requiresReview: string[];
+  unsupported: string[];
+  warnings: BootstrapWarning[];
+  stats: {
+    sectionCount: number;
+    assetCount: number;
+    formCount: number;
+    integrationCount: number;
+    averageSectionConfidence: number;
+  };
+};
+
+export type BootstrapGenerator = {
+  name: "stitch-migrate" | string;
+  version: string;
+  environment?: "local" | "staging" | "production";
+  modelProviders?: Array<{
+    role: "vision" | "normalization" | "classification";
+    name: string;
+    model?: string;
+  }>;
+};
+
+export type BootstrapSourceSummary = {
+  requestedUrl: string;
+  finalUrl: string;
+  origin: string;
+  capturedAt: ISODateString;
+  captureMode: "url";
+  pageType: "singlePageCampaign" | "unknown";
+  viewports: Array<{
+    id: "desktop" | "mobile" | "tablet";
+    width: number;
+    height: number;
+    deviceScaleFactor?: number;
+    screenshotRef?: string;
+    screenshotHash?: string;
+  }>;
+  evidence: {
+    visualMapHash?: string;
+    domSummaryHash?: string;
+    computedStyleSummaryHash?: string;
+    assetManifestHash?: string;
+  };
+  limitations?: string[];
+};
+
+export type BootstrapProjectSeed = {
+  name: string;
+  slug: string;
+  locale?: string;
+  description?: string;
+  recommendedBuildProfile: BuildProfile | "source";
+  initialStatus: "readyForReview" | "needsOwnerReview" | "partial";
+  tags?: string[];
+};
+
+export type BootstrapHandoffPlan = {
+  recommendedNextAction: "review" | "generate" | "fixWarnings" | "unsupported";
+  recommendedBuildProfile: BuildProfile | "source";
+  nextActions: Array<{
+    id: Id;
+    label: string;
+    priority: "low" | "medium" | "high";
+    reason?: string;
+  }>;
+  privacySummary: {
+    containsRawDom: boolean;
+    containsScreenshots: boolean;
+    containsFullCss: boolean;
+    containsScripts: boolean;
+    containsSecrets: boolean;
+  };
+  ingestionHints?: {
+    preferredRenderer?: "react-tailwind";
+    preserveLinksByDefault?: boolean;
+    requireOwnerReviewBeforeProduction?: boolean;
+  };
 };
 
 export type MigrationBootstrap = {
-  id: Id;
-  kind: "stitch-migration-bootstrap";
-  version: "0.1.0";
-  createdAt: ISODateString;
+  kind: "stitch.migrationBootstrap";
+  schemaVersion: string;
   designContractVersion: string;
-  source: SourceProvenance;
-  brand: BrandSpec;
-  contentStrategy: ContentStrategy;
-  page: CampaignPageSpec;
-  migrationReport: MigrationReport;
+  id: Id;
+  createdAt: ISODateString;
+  generator: BootstrapGenerator;
+  source: BootstrapSourceSummary;
+  project: BootstrapProjectSeed;
+  design: {
+    brand: BootstrapBrandSpec;
+    contentStrategy: BootstrapContentStrategy;
+    page: BootstrapCampaignPageSpec;
+  };
   assets: AssetManifest;
-  integrations: IntegrationManifest;
-  recommendedProfile: BuildProfile;
-  warnings: MigrationWarning[];
+  integrations: BootstrapIntegrationManifest;
+  seo: SeoMetadata;
+  provenance: SourceProvenance;
+  report: BootstrapMigrationReport;
+  handoff: BootstrapHandoffPlan;
 };
 
 export type MigrationBootstrapValidationResult = {

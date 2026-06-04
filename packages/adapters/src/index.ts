@@ -45,6 +45,7 @@ import type {
   StitchProject,
   NextAction,
 } from "@stitch/contract";
+import { getBootstrapBuildProfile, getBootstrapSourceUrl, getBootstrapWarnings } from "@stitch/contract";
 
 export type InferenceRequest = {
   task: "respond" | "structured" | "vision" | "embed";
@@ -697,14 +698,14 @@ function stableTransportHash(value: string): string {
 
 
 export function createBootstrapSummary(bootstrap: MigrationBootstrap): string {
-  const source = bootstrap.source.originalUrl ?? bootstrap.source.sourceKind;
-  const sections = bootstrap.page.sections.length;
-  const warnings = bootstrap.warnings.length;
-  return `Bootstrap ${bootstrap.id} from ${source}: ${sections} section(s), ${warnings} warning(s), recommended profile ${bootstrap.recommendedProfile}.`;
+  const source = getBootstrapSourceUrl(bootstrap);
+  const sections = bootstrap.design.page.sections.length;
+  const warnings = getBootstrapWarnings(bootstrap).length;
+  return `Bootstrap ${bootstrap.id} from ${source}: ${sections} section(s), ${warnings} warning(s), recommended profile ${getBootstrapBuildProfile(bootstrap)}.`;
 }
 
 export function createBootstrapImportPlan(bootstrap: MigrationBootstrap, ingestion?: BootstrapIngestionResult): BootstrapImportPlan {
-  const warnings = [...bootstrap.warnings.map((warning) => warning.message), ...(ingestion?.warnings ?? [])];
+  const warnings = [...getBootstrapWarnings(bootstrap).map((warning) => warning.message), ...(ingestion?.warnings ?? [])];
   return {
     id: `bootstrap-import-${bootstrap.id}`,
     bootstrapId: bootstrap.id,

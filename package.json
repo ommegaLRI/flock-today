@@ -7,7 +7,8 @@
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "build": "tsc -p tsconfig.json",
-    "check": "npm run typecheck"
+    "check": "npm run typecheck",
+    "eval:bootstrap": "npm run build && node --loader ./tests/evals/stitch-dist-loader.mjs tests/evals/bootstrap-ingestion.mjs"
   },
   "workspaces": [
     "apps/*",

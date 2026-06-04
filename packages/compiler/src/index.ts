@@ -2,6 +2,9 @@ import { createCapsuleFiles } from "@stitch/capsule";
 import {
   createDefaultBrandSpec,
   createDefaultDeploymentManifest,
+  adaptMigrationBootstrapToCampaignPageSpec,
+  getBootstrapBuildProfile,
+  getBootstrapWarnings,
   type BrandExtraction,
   type BrandSpec,
   type BuildProfile,
@@ -75,6 +78,8 @@ export type ProjectInstallOptions = {
   target?: InstallTarget;
   buildProfile?: BuildProfile;
   feedbackTransports?: FeedbackTransportConfig[];
+  allowBlockedBootstrap?: boolean;
+  allowProductionWithReviewWarnings?: boolean;
 };
 
 export function ingestMigrationBootstrap(bootstrap: MigrationBootstrap): BootstrapIngestionResult {
@@ -83,8 +88,9 @@ export function ingestMigrationBootstrap(bootstrap: MigrationBootstrap): Bootstr
 
 export function compileBootstrapToBundle(bootstrap: MigrationBootstrap, options: BundleOptions = {}): BootstrapBundle {
   const validation = validateBootstrapForOwnership(bootstrap);
+  const buildProfile = options.buildProfile ?? getBootstrapBuildProfile(bootstrap);
+  assertBootstrapCompilationAllowed(validation, buildProfile, options);
   const ingestion = ingestMigrationBootstrap(bootstrap);
-  const buildProfile = options.buildProfile ?? bootstrap.recommendedProfile ?? "owner";
   const base = createPortableSiteBundle(ingestion.projectState.spec, {
     buildProfile,
     ...(options.feedbackTransports ? { feedbackTransports: options.feedbackTransports } : {}),
@@ -101,7 +107,7 @@ export function compileBootstrapToBundle(bootstrap: MigrationBootstrap, options:
     ...base,
     files,
     manifest: createGeneratedFileManifest(files),
-    warnings: [...base.warnings, ...bootstrap.warnings.map((warning) => ({ code: warning.code as any, message: warning.message, severity: warning.severity === "blocked" ? "blocked" as const : warning.severity === "warning" ? "warning" as const : "info" as const }))],
+    warnings: [...base.warnings, ...getBootstrapWarnings(bootstrap).map((warning) => ({ code: warning.code as any, message: warning.message, severity: warning.severity }))],
     sourceStateVersion: ingestion.projectState.version,
     generatedFromEventId: ingestion.initialEvent.id,
     provenance: [
@@ -122,10 +128,13 @@ export function compileBootstrapToBundle(bootstrap: MigrationBootstrap, options:
 
 
 export function createStitchProjectFromBootstrap(bootstrap: MigrationBootstrap, options: ProjectInstallOptions = {}): StitchProject {
-  const rootDir = options.rootDir ?? slugifyProjectRoot(bootstrap.page.slug || bootstrap.page.title || bootstrap.id);
+  const spec = adaptMigrationBootstrapToCampaignPageSpec(bootstrap);
+  const rootDir = options.rootDir ?? slugifyProjectRoot(spec.slug || spec.title || bootstrap.id);
   const bundle = compileBootstrapToBundle(bootstrap, {
-    buildProfile: options.buildProfile ?? bootstrap.recommendedProfile,
+    buildProfile: options.buildProfile ?? getBootstrapBuildProfile(bootstrap),
     ...(options.feedbackTransports ? { feedbackTransports: options.feedbackTransports } : {}),
+    ...(options.allowBlockedBootstrap ? { allowBlockedBootstrap: true } : {}),
+    ...(options.allowProductionWithReviewWarnings ? { allowProductionWithReviewWarnings: true } : {}),
   });
   const installPlan = createInstallPlan(bootstrap, bundle, { rootDir, target: options.target ?? "folder" });
   const installedEvent = createProjectInstalledEvent(`project-${bootstrap.id}`, installPlan);
@@ -133,7 +142,7 @@ export function createStitchProjectFromBootstrap(bootstrap: MigrationBootstrap, 
   const manifest = createStitchProjectManifest(bootstrap, bundle, installPlan, rootDir);
   const project: StitchProject = {
     id: `project-${bootstrap.id}`,
-    name: bootstrap.page.title,
+    name: spec.title,
     createdAt: new Date().toISOString(),
     rootDir,
     activeProfile: bundle.buildProfile,
@@ -160,7 +169,8 @@ export function compileProjectFiles(project: StitchProject): GeneratedFile[] {
 }
 
 export function createInstallPlan(bootstrap: MigrationBootstrap, bundle: GeneratedSiteBundle, options: { rootDir?: string; target?: InstallTarget } = {}): InstallPlan {
-  const rootDir = options.rootDir ?? slugifyProjectRoot(bootstrap.page.slug || bootstrap.page.title || bootstrap.id);
+  const spec = adaptMigrationBootstrapToCampaignPageSpec(bootstrap);
+  const rootDir = options.rootDir ?? slugifyProjectRoot(spec.slug || spec.title || bootstrap.id);
   const target = options.target ?? "folder";
   const files = createProjectFileRoles(bundle.files);
   const warnings = createInstallWarnings(bootstrap, bundle);
@@ -186,7 +196,7 @@ function createStitchProjectManifest(bootstrap: MigrationBootstrap, bundle: Gene
   const fileRoles = installPlan.files;
   return {
     id: `manifest-${bootstrap.id}`,
-    name: bootstrap.page.title,
+    name: adaptMigrationBootstrapToCampaignPageSpec(bootstrap).title,
     rootDir,
     designContractVersion: bootstrap.designContractVersion,
     activeProfile: bundle.buildProfile,
@@ -231,8 +241,9 @@ function createInstallWarnings(bootstrap: MigrationBootstrap, bundle: GeneratedS
   if (bundle.buildProfile === "owner") warnings.push({ code: "owner-profile-private", severity: "warning", message: "Owner profile includes /_stitch workbench assets. Keep this install private or access-controlled." });
   if (bundle.buildProfile === "review") warnings.push({ code: "review-profile-comment-only", severity: "info", message: "Review profile includes comment-only feedback runtime. It cannot edit or publish." });
   if (bundle.buildProfile === "production") warnings.push({ code: "production-profile-no-workbench", severity: "info", message: "Production profile excludes owner workbench and should be used for public publishing." });
-  if (bootstrap.assets.assets.some((asset) => asset.requiresDownload)) warnings.push({ code: "assets-require-download", severity: "warning", message: "Some migration assets are referenced by URL and may need downloading or replacement before production." });
-  if (bootstrap.warnings.length > 0) warnings.push({ code: "warnings-from-migration", severity: "warning", message: `${bootstrap.warnings.length} migration warning(s) should be reviewed by the owner.` });
+  if (bootstrap.assets.items.some((asset) => asset.migrationPolicy === "requiresReview" || asset.migrationPolicy === "unsupported" || !asset.storageRef)) warnings.push({ code: "assets-require-download", severity: "warning", message: "Some migration assets are referenced by URL and may need downloading or replacement before production." });
+  const bootstrapWarnings = getBootstrapWarnings(bootstrap);
+  if (bootstrapWarnings.length > 0) warnings.push({ code: "warnings-from-migration", severity: "warning", message: `${bootstrapWarnings.length} migration warning(s) should be reviewed by the owner.` });
   warnings.push({ code: "manual-deploy-step", severity: "info", message: "Phase 10 creates an installable project; real provider API deployment remains a later phase." });
   return warnings;
 }
@@ -246,6 +257,19 @@ function createInstallNextActions(profile: BuildProfile, warnings: InstallWarnin
   ];
   if (profile !== "review") actions.splice(2, 0, { id: "create-review-build", kind: "createReviewBuild", label: "Create review build", description: "Generate a review profile bundle so clients can leave comment-only pins." });
   return actions;
+}
+
+function assertBootstrapCompilationAllowed(
+  validation: MigrationBootstrapValidationResult,
+  buildProfile: BuildProfile,
+  options: Pick<BundleOptions, "allowBlockedBootstrap" | "allowProductionWithReviewWarnings"> = {}
+): void {
+  if (validation.status === "blocked" && !options.allowBlockedBootstrap) {
+    throw new Error(`Blocked MigrationBootstrap cannot be compiled: ${validation.warnings.join("; ")}`);
+  }
+  if (validation.status === "needsReview" && buildProfile === "production" && !options.allowProductionWithReviewWarnings) {
+    throw new Error(`MigrationBootstrap needs owner review before production compilation: ${validation.warnings.join("; ")}`);
+  }
 }
 
 function slugifyProjectRoot(value: string): string {
@@ -283,6 +307,8 @@ export type BundleOptions = {
   refine?: boolean;
   inferenceProvider?: ContractInferenceProvider;
   feedbackTransports?: FeedbackTransportConfig[];
+  allowBlockedBootstrap?: boolean;
+  allowProductionWithReviewWarnings?: boolean;
 };
 
 type RenderOptions = {
@@ -1015,8 +1041,11 @@ export function compileProjectToExportArtifact(project: StitchProject, profile: 
 }
 
 export function compileBootstrapToExportArtifact(bootstrap: MigrationBootstrap, options: ProjectInstallOptions & { exportProfile?: ExportProfile } = {}): ExportArtifact {
+  const exportProfile = options.exportProfile ?? getBootstrapBuildProfile(bootstrap);
+  const validation = validateBootstrapForOwnership(bootstrap);
+  assertBootstrapCompilationAllowed(validation, exportProfile === "source" ? "owner" : exportProfile, options);
   const project = createStitchProjectFromBootstrap(bootstrap, options);
-  return compileProjectToExportArtifact(project, options.exportProfile ?? project.activeProfile);
+  return compileProjectToExportArtifact(project, exportProfile);
 }
 
 export function compileExportArtifactToDeployPackage(artifact: ExportArtifact, provider: DeployProvider = "cloudflarePages", project?: StitchProject): DeployPackage {
@@ -1032,8 +1061,11 @@ export function compileBootstrapToDeployPackage(
   bootstrap: MigrationBootstrap,
   options: ProjectInstallOptions & { exportProfile?: ExportProfile; provider?: DeployProvider } = {}
 ): DeployPackage {
+  const exportProfile = options.exportProfile ?? "production";
+  const validation = validateBootstrapForOwnership(bootstrap);
+  assertBootstrapCompilationAllowed(validation, exportProfile === "source" ? "owner" : exportProfile, options);
   const project = createStitchProjectFromBootstrap(bootstrap, options);
-  return compileProjectToDeployPackage(project, options.provider ?? "cloudflarePages", options.exportProfile ?? "production");
+  return compileProjectToDeployPackage(project, options.provider ?? "cloudflarePages", exportProfile);
 }
 
 export function compileProjectToPublicExposureAudit(project: StitchProject, profile: ExportProfile = project.activeProfile): PublicExposureAudit {
@@ -1068,6 +1100,9 @@ export function compileBootstrapToMaterializedArtifact(
   bootstrap: MigrationBootstrap,
   options: ProjectInstallOptions & { exportProfile?: ExportProfile; format?: ArtifactFormat; fileName?: string } = {}
 ): MaterializedArtifact {
+  const exportProfile = options.exportProfile ?? "production";
+  const validation = validateBootstrapForOwnership(bootstrap);
+  assertBootstrapCompilationAllowed(validation, exportProfile === "source" ? "owner" : exportProfile, options);
   const project = createStitchProjectFromBootstrap(bootstrap, options);
-  return compileProjectToMaterializedArtifact(project, options.exportProfile ?? "production", options);
+  return compileProjectToMaterializedArtifact(project, exportProfile, options);
 }

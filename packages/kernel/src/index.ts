@@ -1,5 +1,11 @@
 import {
+  adaptMigrationBootstrapToCampaignPageSpec,
+  adaptMigrationBootstrapToMigrationReport,
   blockedSafetyReport,
+  getBootstrapBuildProfile,
+  getBootstrapSourceUrl,
+  getBootstrapWarnings,
+  validateMigrationBootstrap,
   type CampaignPageSpec,
   type ChangePin,
   type JsonPatchOperation,
@@ -961,26 +967,23 @@ export function importFeedbackBundleIntoState(state: StitchProjectState, bundle:
 
 
 export function validateBootstrapForOwnership(bootstrap: MigrationBootstrap): MigrationBootstrapValidationResult {
-  const warnings: string[] = [];
-  const normalizedFields: string[] = [];
+  const contractValidation = validateMigrationBootstrap(bootstrap);
+  const warnings = [...contractValidation.warnings];
+  const normalizedFields = [...contractValidation.normalizedFields];
+  const spec = adaptMigrationBootstrapToCampaignPageSpec(bootstrap);
+  const report = adaptMigrationBootstrapToMigrationReport(bootstrap);
+  const bootstrapWarnings = getBootstrapWarnings(bootstrap);
 
-  if (bootstrap.kind !== "stitch-migration-bootstrap") warnings.push("Bootstrap kind is not stitch-migration-bootstrap.");
-  if (bootstrap.version !== "0.1.0") warnings.push(`Unexpected bootstrap version: ${bootstrap.version}.`);
-  if (!bootstrap.designContractVersion) warnings.push("Bootstrap is missing designContractVersion.");
-  if (!bootstrap.page?.id || !Array.isArray(bootstrap.page.sections)) warnings.push("Bootstrap is missing a valid CampaignPageSpec.");
-  if ((bootstrap.page.sections ?? []).length === 0) warnings.push("Bootstrap page contains no sections.");
-  if (bootstrap.page.brand.id !== bootstrap.brand.id) {
-    warnings.push("Bootstrap page.brand differs from bootstrap.brand; ingestion will prefer page.brand as canonical.");
-    normalizedFields.push("brand");
-  }
-  if (bootstrap.page.contentStrategy.goal !== bootstrap.contentStrategy.goal) {
-    warnings.push("Bootstrap page.contentStrategy differs from bootstrap.contentStrategy; ingestion will prefer page.contentStrategy as canonical.");
-    normalizedFields.push("contentStrategy");
-  }
-  if (bootstrap.warnings.some((warning) => warning.severity === "blocked")) warnings.push("Migration endpoint returned blocked migration warnings.");
+  if (!spec.id || !Array.isArray(spec.sections)) warnings.push("Bootstrap adapter could not produce a valid CampaignPageSpec.");
+  if ((spec.sections ?? []).length === 0) warnings.push("Bootstrap page contains no adaptable sections.");
+  if (bootstrap.handoff.privacySummary.containsSecrets) warnings.push("Bootstrap privacy summary indicates secrets are present.");
+  if (bootstrap.handoff.privacySummary.containsRawDom) warnings.push("Bootstrap contains raw DOM; ingestion should preserve only private provenance.");
+  if (bootstrap.handoff.privacySummary.containsScripts) warnings.push("Bootstrap contains scripts; production generation requires owner review.");
+  if (bootstrapWarnings.some((warning) => warning.severity === "blocked")) warnings.push("Migration endpoint returned blocked migration warnings.");
+  if (bootstrap.report.score < 0.55) warnings.push("Migration confidence is low and needs owner review.");
 
-  const blocked = !bootstrap.page?.id || !Array.isArray(bootstrap.page.sections) || bootstrap.page.sections.length === 0;
-  const needsReview = warnings.length > 0 || bootstrap.migrationReport.confidence < 0.55 || bootstrap.warnings.some((warning) => warning.severity === "warning");
+  const blocked = !contractValidation.valid || !spec.id || !Array.isArray(spec.sections) || spec.sections.length === 0 || bootstrap.handoff.privacySummary.containsSecrets;
+  const needsReview = !blocked && (warnings.length > 0 || report.confidence < 0.7 || bootstrapWarnings.some((warning) => warning.severity === "warning"));
 
   return {
     valid: !blocked,
@@ -991,24 +994,27 @@ export function validateBootstrapForOwnership(bootstrap: MigrationBootstrap): Mi
 }
 
 export function createBootstrapIngestedEvent(bootstrap: MigrationBootstrap): StitchEvent {
-  return createStateEvent("migration.bootstrap.ingested", "migration", `Ingested migration bootstrap ${bootstrap.id} from ${bootstrap.source.originalUrl ?? bootstrap.source.sourceKind}.`, {
+  const report = adaptMigrationBootstrapToMigrationReport(bootstrap);
+  return createStateEvent("migration.bootstrap.ingested", "migration", `Ingested migration bootstrap ${bootstrap.id} from ${getBootstrapSourceUrl(bootstrap)}.`, {
     data: {
       bootstrapId: bootstrap.id,
       source: bootstrap.source,
       designContractVersion: bootstrap.designContractVersion,
-      recommendedProfile: bootstrap.recommendedProfile,
-      migrationConfidence: bootstrap.migrationReport.confidence,
-      warnings: bootstrap.warnings.length,
+      recommendedProfile: getBootstrapBuildProfile(bootstrap),
+      migrationConfidence: report.confidence,
+      warnings: getBootstrapWarnings(bootstrap).length,
     },
   });
 }
 
 export function createProjectStateFromBootstrap(bootstrap: MigrationBootstrap): BootstrapIngestionResult {
   const validation = validateBootstrapForOwnership(bootstrap);
-  const initial = createInitialProjectState(bootstrap.page, {
+  const spec = adaptMigrationBootstrapToCampaignPageSpec(bootstrap);
+  const report = adaptMigrationBootstrapToMigrationReport(bootstrap);
+  const initial = createInitialProjectState(spec, {
     id: `project-${bootstrap.id}`,
     createdAt: bootstrap.createdAt,
-    migrationReport: bootstrap.migrationReport,
+    migrationReport: report,
     source: "migration",
     actor: { role: "system" },
   });
@@ -1016,14 +1022,14 @@ export function createProjectStateFromBootstrap(bootstrap: MigrationBootstrap): 
   let state = reduceProjectState(initial, event);
   const provenance = createProvenanceRecord("migration", `Bootstrap ${bootstrap.id} became the owner-controlled Stitch project state.`, {
     eventId: event.id,
-    policy: "migration-bootstrap-ingestion-v0",
+    policy: "migration-bootstrap-ingestion-v0.1",
     inputHash: stableHash(JSON.stringify(bootstrap)),
-    outputHash: stableHash(JSON.stringify(bootstrap.page)),
+    outputHash: stableHash(JSON.stringify(spec)),
   });
   state = {
     ...state,
     provenance: [...state.provenance, provenance],
-    migrationReport: bootstrap.migrationReport,
+    migrationReport: report,
   };
   const snap = createSnapshot(state, `Original bootstrap import ${bootstrap.id}`, event.id);
 
@@ -1033,7 +1039,7 @@ export function createProjectStateFromBootstrap(bootstrap: MigrationBootstrap): 
     validation,
     projectState: snap.state,
     initialEvent: event,
-    warnings: [...validation.warnings, ...bootstrap.warnings.map((warning) => warning.message)],
+    warnings: [...validation.warnings, ...getBootstrapWarnings(bootstrap).map((warning) => warning.message)],
   };
 }
 

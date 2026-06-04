@@ -51,9 +51,6 @@ Capture / private migration
 - `packages/kernel` — safety, spec operations, project-state reducers, provenance, feedback import, bootstrap ownership checks.
 - `packages/capsule` — review runtime and private workbench assets bundled into generated sites.
 - `packages/adapters` — inference providers, deploy handoff plans, feedback transport handoffs, bootstrap import/download plans.
-- `apps/migrate-api` — reference shape for the private migration endpoint response.
-- `apps/inference-api` — optional structured inference rail.
-- `apps/demo` — browser demo of the current architecture.
 
 ## The important boundary
 
