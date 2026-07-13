@@ -1,7 +1,7 @@
 {
   "name": "@flock/capsule",
-  "version": "0.1.0",
-  "description": "Owner-only AI section editing capsule for Stitch-generated Astro sites.",
+  "version": "1.0.0",
+  "description": "Private, browser-local section editing intelligence for Stitch-generated Astro sites.",
   "type": "module",
   "license": "MIT",
   "files": [
@@ -26,8 +26,10 @@
   },
   "scripts": {
     "build": "node ./scripts/build.mjs",
+    "dev": "npm run build && tsc --watch --preserveWatchOutput",
     "test": "npm run build && node --test",
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit",
+    "prepack": "npm run build"
   },
   "peerDependencies": {
     "astro": ">=5 <6"
@@ -39,5 +41,9 @@
   },
   "engines": {
     "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@astrojs/compiler": "^4.0.0",
+    "@mlc-ai/web-llm": "^0.2.84"
   }
 }

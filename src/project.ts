@@ -1,19 +1,23 @@
 import { createHash } from 'node:crypto';
 import { access, readFile, readdir, rename, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { transform } from '@astrojs/compiler';
 import type {
+  FlockEditIntent,
+  FlockPreviewInput,
   FlockProjectSummary,
-  FlockSectionContext,
+  FlockSectionPacket,
   FlockSectionSummary,
   JsonObject,
 } from './types.js';
 
 const SECTION_ID_PATTERN = /data-section-id\s*=\s*["']([^"']+)["']/;
 const SECTION_ROLE_PATTERN = /data-stitch-role\s*=\s*["']section["']/;
+const EXTERNAL_SCRIPT_PATTERN = /<script\b[^>]*\bsrc\s*=\s*["'](?:https?:)?\/\//i;
+const MAX_SECTION_BYTES = 160 * 1024;
 
 interface StitchManifest extends JsonObject {
   projectId?: string;
-  version?: string;
   files?: Array<{ path?: string; hash?: string }>;
   source?: { contractHash?: string; runHash?: string };
   target?: { framework?: string; rendererTarget?: string };
@@ -24,6 +28,17 @@ interface SectionRecord {
   absolutePath: string;
   relativePath: string;
   source: string;
+}
+
+export class FlockProjectError extends Error {
+  constructor(
+    message: string,
+    readonly status = 400,
+    readonly code = 'flock_error',
+    readonly failures?: string[],
+  ) {
+    super(message);
+  }
 }
 
 function isObject(value: unknown): value is JsonObject {
@@ -54,7 +69,7 @@ function normalizeRelative(filePath: string): string {
 function assertInside(root: string, candidate: string): void {
   const relative = path.relative(root, candidate);
   if (relative.startsWith('..') || path.isAbsolute(relative)) {
-    throw new Error('Resolved path escapes the project root.');
+    throw new FlockProjectError('Resolved path escapes the project root.', 403, 'unsafe_path');
   }
 }
 
@@ -106,10 +121,136 @@ function visualFor(visualIndex: unknown, sectionId: string): JsonObject | undefi
   return visualIndex.sections.find((entry) => isObject(entry) && entry.sectionId === sectionId) as JsonObject | undefined;
 }
 
+function unique(values: string[]): string[] {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+}
+
+function sourceAttributes(source: string, attributes: string[]): string[] {
+  const values: string[] = [];
+  for (const attribute of attributes) {
+    const pattern = new RegExp(`\\b${attribute}\\s*=\\s*["']([^"']+)["']`, 'gi');
+    for (const match of source.matchAll(pattern)) if (match[1]) values.push(match[1]);
+  }
+  return unique(values);
+}
+
+function sourceVisibleContent(source: string): string[] {
+  const body = source
+    .replace(/^---[\s\S]*?---\s*/m, '')
+    .replace(/<script\b[\s\S]*?<\/script>/gi, '')
+    .replace(/<style\b[\s\S]*?<\/style>/gi, '')
+    .replace(/<!--([\s\S]*?)-->/g, '')
+    .replace(/\{[\s\S]*?\}/g, '');
+  const values: string[] = [];
+  for (const match of body.matchAll(/>([^<]+)</g)) {
+    const text = match[1]?.replace(/\s+/g, ' ').trim();
+    if (text && text.length > 1) values.push(text);
+  }
+  return unique(values);
+}
+
+function collectHintedStrings(value: unknown, keyPattern: RegExp, output: string[], parentKey = ''): void {
+  if (typeof value === 'string') {
+    if (keyPattern.test(parentKey)) output.push(value);
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectHintedStrings(item, keyPattern, output, parentKey);
+    return;
+  }
+  if (!isObject(value)) return;
+  for (const [key, item] of Object.entries(value)) collectHintedStrings(item, keyPattern, output, key);
+}
+
+function compactVisibleContent(...values: unknown[]): string[] {
+  const output: string[] = [];
+  for (const value of values) collectHintedStrings(value, /^(text|copy|content|title|heading|label|body|eyebrow|caption)$/i, output);
+  return unique(output).filter((item) => item.length <= 500).slice(0, 120);
+}
+
+function compactLinks(...values: unknown[]): string[] {
+  const output: string[] = [];
+  for (const value of values) collectHintedStrings(value, /^(href|url|destination|targetUrl|action)$/i, output);
+  return unique(output).slice(0, 80);
+}
+
+function compactAssets(...values: unknown[]): string[] {
+  const output: string[] = [];
+  for (const value of values) collectHintedStrings(value, /^(src|asset|assetPath|image|poster|media)$/i, output);
+  return unique(output).slice(0, 80);
+}
+
+function flattenTokens(value: unknown, pathParts: string[] = [], output: Array<[string, unknown]> = []): Array<[string, unknown]> {
+  if (!isObject(value)) {
+    if (pathParts.length) output.push([pathParts.join('.'), value]);
+    return output;
+  }
+  for (const [key, item] of Object.entries(value)) flattenTokens(item, [...pathParts, key], output);
+  return output;
+}
+
+function referencedTokens(tokens: unknown, references: unknown[]): JsonObject | undefined {
+  if (!isObject(tokens)) return undefined;
+  const haystack = JSON.stringify(references).toLowerCase();
+  const selected = flattenTokens(tokens).filter(([tokenPath, value]) => {
+    const leaf = tokenPath.split('.').at(-1) ?? tokenPath;
+    const valueString = typeof value === 'string' ? value : '';
+    return haystack.includes(tokenPath.toLowerCase())
+      || (leaf.length > 3 && haystack.includes(leaf.toLowerCase()))
+      || (valueString.startsWith('var(') && haystack.includes(valueString.toLowerCase()));
+  }).slice(0, 80);
+  return selected.length ? Object.fromEntries(selected) : undefined;
+}
+
+function missingValues(required: string[], candidate: string): string[] {
+  return required.filter((value) => !candidate.includes(value));
+}
+
+async function candidateFailures(
+  current: SectionRecord,
+  source: string,
+  intent: FlockEditIntent,
+): Promise<string[]> {
+  const failures: string[] = [];
+  if (!source.trim()) failures.push('Candidate source is empty.');
+  if (Buffer.byteLength(source, 'utf8') > MAX_SECTION_BYTES) failures.push(`Candidate exceeds ${MAX_SECTION_BYTES / 1024} KB.`);
+  if (!SECTION_ROLE_PATTERN.test(source)) failures.push('Required data-stitch-role="section" is missing.');
+  if (source.match(SECTION_ID_PATTERN)?.[1] !== current.id) failures.push(`Required data-section-id="${current.id}" is missing or changed.`);
+  if (EXTERNAL_SCRIPT_PATTERN.test(source)) failures.push('External scripts are not allowed.');
+
+  if (!intent.mayChangeContent) {
+    const missing = missingValues(sourceVisibleContent(current.source), source);
+    if (missing.length) failures.push(`Visible content disappeared: ${missing.slice(0, 6).join(' | ')}`);
+  }
+  if (!intent.mayChangeLinks) {
+    const missing = missingValues(sourceAttributes(current.source, ['href', 'action']), source);
+    if (missing.length) failures.push(`Required links disappeared: ${missing.slice(0, 6).join(' | ')}`);
+  }
+  if (!intent.mayChangeAssets) {
+    const missing = missingValues(sourceAttributes(current.source, ['src', 'poster']), source);
+    if (missing.length) failures.push(`Required assets disappeared: ${missing.slice(0, 6).join(' | ')}`);
+  }
+
+  if (!failures.length) {
+    try {
+      const result = await transform(source, { filename: current.absolutePath, sourcemap: false });
+      const errors = result.diagnostics.filter((diagnostic) => diagnostic.severity === 1);
+      for (const diagnostic of errors.slice(0, 8)) {
+        failures.push(`Astro compiler: ${diagnostic.text} (${diagnostic.location.line}:${diagnostic.location.column})`);
+      }
+      for (const styleError of result.styleError.slice(0, 4)) failures.push(`Style compiler: ${styleError}`);
+    } catch (error) {
+      failures.push(`Astro compiler: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  return failures;
+}
+
 export class StitchProject {
   readonly root: string;
   readonly stitchRoot: string;
   private readonly previousSource = new Map<string, string>();
+  private readonly mutationTails = new Map<string, Promise<unknown>>();
 
   private constructor(root: string) {
     this.root = path.resolve(root);
@@ -161,12 +302,23 @@ export class StitchProject {
 
   private async sectionRecord(sectionId: string): Promise<SectionRecord> {
     const section = (await this.scanSections()).get(sectionId);
-    if (!section) throw new Error(`Unknown Stitch section: ${sectionId}`);
+    if (!section) throw new FlockProjectError(`Unknown Stitch section: ${sectionId}`, 404, 'unknown_section');
     assertInside(this.root, section.absolutePath);
     return section;
   }
 
-  async summary(generatorAvailable: boolean): Promise<FlockProjectSummary> {
+  private async withMutation<T>(sectionId: string, task: () => Promise<T>): Promise<T> {
+    const previous = this.mutationTails.get(sectionId) ?? Promise.resolve();
+    const current = previous.catch(() => undefined).then(task);
+    this.mutationTails.set(sectionId, current);
+    try {
+      return await current;
+    } finally {
+      if (this.mutationTails.get(sectionId) === current) this.mutationTails.delete(sectionId);
+    }
+  }
+
+  async summary(): Promise<FlockProjectSummary> {
     const [manifest, contract, run, visualIndex, sections] = await Promise.all([
       this.manifest(),
       this.contract(),
@@ -195,90 +347,83 @@ export class StitchProject {
         currentHash,
         hasVisual: Boolean(visual?.path),
         hasFailure: await exists(path.join(this.stitchRoot, 'failures', 'sections', `${section.id}.json`)),
+        canRevert: this.previousSource.has(section.id),
       });
     }
     summaries.sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
 
     const runObject = isObject(run) ? run : {};
     const contractProject = isObject(contract.project) ? contract.project : {};
-    const contractOrigin = isObject(contract.origin) ? contract.origin : {};
     return {
       kind: 'flock.projectSummary',
-      version: '0.1.0',
+      version: '1.0.0',
       projectId: manifest.projectId ?? 'unknown',
       projectName: typeof contractProject.name === 'string' ? contractProject.name : undefined,
-      sourceUrl: typeof contractOrigin.sourceUrl === 'string' ? contractOrigin.sourceUrl : undefined,
-      contractVersion: typeof contract.version === 'string' ? contract.version : undefined,
-      contractHash: manifest.source?.contractHash,
-      runHash: manifest.source?.runHash,
       stitchRunStatus: typeof runObject.status === 'string' ? runObject.status : undefined,
       projectionStatus: isObject(runObject.projection) && typeof runObject.projection.status === 'string'
         ? runObject.projection.status : undefined,
       publicationStatus: isObject(runObject.publication) && typeof runObject.publication.status === 'string'
         ? runObject.publication.status : undefined,
-      generatorAvailable,
       sections: summaries,
     };
   }
 
-  async context(sectionId: string): Promise<FlockSectionContext> {
-    const [manifest, contract, provenance, visualIndex] = await Promise.all([
+  async packet(sectionId: string): Promise<FlockSectionPacket> {
+    const [manifest, contract, provenance] = await Promise.all([
       this.manifest(),
       this.contract(),
       this.optionalJson(path.join(this.stitchRoot, 'provenance.json')),
-      this.optionalJson(path.join(this.stitchRoot, 'visuals', 'sections.json')),
     ]);
-    const sectionRecord = await this.sectionRecord(sectionId);
-    const originalHash = (manifest.files ?? []).find((item) => item.path === sectionRecord.relativePath)?.hash;
+    const record = await this.sectionRecord(sectionId);
     const { page, section } = findSectionContract(contract, sectionId);
     const factsRoot = isObject(contract.facts) ? contract.facts : {};
     const designSystem = isObject(contract.designSystem) ? contract.designSystem : {};
-    const visual = visualFor(visualIndex, sectionId);
+    const facts = sectionScopedItems(factsRoot.items, sectionId);
+    const occurrences = sectionScopedItems(factsRoot.occurrences, sectionId);
+    const recipes = sectionRecipes(contract, sectionId);
     const failurePath = path.join(this.stitchRoot, 'failures', 'sections', `${sectionId}.json`);
 
     return {
-      kind: 'flock.sectionContext',
-      version: '0.1.0',
-      project: {
-        id: manifest.projectId ?? 'unknown',
-        name: isObject(contract.project) && typeof contract.project.name === 'string' ? contract.project.name : undefined,
-        sourceUrl: isObject(contract.origin) && typeof contract.origin.sourceUrl === 'string' ? contract.origin.sourceUrl : undefined,
-        contractVersion: typeof contract.version === 'string' ? contract.version : undefined,
-        contractHash: manifest.source?.contractHash,
-        runHash: manifest.source?.runHash,
-        framework: manifest.target?.framework,
-        rendererTarget: manifest.target?.rendererTarget,
-      },
-      page,
+      kind: 'flock.sectionPacket',
+      version: '1.0.0',
       section: {
         id: sectionId,
         label: typeof section?.label === 'string' ? section.label : undefined,
         intent: typeof section?.intent === 'string' ? section.intent : undefined,
         route: typeof page?.route === 'string' ? page.route : undefined,
-        file: sectionRecord.relativePath,
-        source: sectionRecord.source,
-        modified: Boolean(originalHash && originalHash !== sha256(sectionRecord.source)),
-        contract: section,
+        file: record.relativePath,
+        source: record.source,
+        baseHash: sha256(record.source),
       },
-      facts: sectionScopedItems(factsRoot.items, sectionId),
-      occurrences: sectionScopedItems(factsRoot.occurrences, sectionId),
-      recipes: sectionRecipes(contract, sectionId),
-      tokens: designSystem.tokens,
+      visibleContent: unique([
+        ...sourceVisibleContent(record.source),
+        ...compactVisibleContent(section, facts, occurrences),
+      ]).slice(0, 160),
+      links: unique([
+        ...sourceAttributes(record.source, ['href', 'action']),
+        ...compactLinks(section, facts, occurrences),
+      ]).slice(0, 100),
+      assets: unique([
+        ...sourceAttributes(record.source, ['src', 'poster']),
+        ...compactAssets(section, facts, occurrences),
+      ]).slice(0, 100),
+      contract: section,
+      facts,
+      occurrences,
+      recipes,
+      tokens: referencedTokens(designSystem.tokens, [record.source, section, recipes]),
       reviewItems: sectionReviewItems(provenance, sectionId),
       failure: await this.optionalJson(failurePath),
-      visual: visual && typeof visual.path === 'string' ? {
-        path: visual.path,
-        mimeType: typeof visual.mimeType === 'string' ? visual.mimeType : undefined,
-        width: typeof visual.width === 'number' ? visual.width : undefined,
-        height: typeof visual.height === 'number' ? visual.height : undefined,
-      } : undefined,
       constraints: {
         framework: 'astro',
         styling: 'tailwind',
         replacementUnit: 'complete-section-file',
         requiredSectionId: sectionId,
         requiredRootAttribute: 'data-stitch-role="section"',
-        preserveProjectFilesOutsideSection: true,
+        preserveContentByDefault: true,
+        preserveLinksByDefault: true,
+        preserveAssetsByDefault: true,
+        noExternalScripts: true,
       },
     };
   }
@@ -296,54 +441,63 @@ export class StitchProject {
     };
   }
 
-  async replaceSection(sectionId: string, nextSource: string): Promise<FlockSectionSummary> {
-    const current = await this.sectionRecord(sectionId);
-    const source = nextSource.trim();
-    if (!source) throw new Error('Generated section source is empty.');
-    if (!SECTION_ROLE_PATTERN.test(source)) {
-      throw new Error('Generated section must retain data-stitch-role="section".');
-    }
-    const generatedId = source.match(SECTION_ID_PATTERN)?.[1];
-    if (generatedId !== sectionId) {
-      throw new Error(`Generated section must retain data-section-id="${sectionId}".`);
-    }
+  async previewSection(sectionId: string, input: FlockPreviewInput): Promise<FlockSectionSummary> {
+    return this.withMutation(sectionId, async () => {
+      const current = await this.sectionRecord(sectionId);
+      if (sha256(current.source) !== input.baseHash) {
+        throw new FlockProjectError(
+          'This section changed while local AI was working. Generate again from the current version.',
+          409,
+          'stale_source',
+        );
+      }
+      const source = input.source.trim();
+      const failures = await candidateFailures(current, source, input.intent);
+      if (failures.length) {
+        throw new FlockProjectError('The candidate did not pass Flock checks.', 422, 'candidate_invalid', failures);
+      }
 
-    this.previousSource.set(sectionId, current.source);
-    const temporary = `${current.absolutePath}.flock-${process.pid}-${Date.now()}.tmp`;
-    assertInside(this.root, temporary);
-    try {
-      await writeFile(temporary, `${source}\n`, 'utf8');
-      await rename(temporary, current.absolutePath);
-    } finally {
-      await unlink(temporary).catch(() => undefined);
-    }
-    return this.getSectionSummary(sectionId);
+      if (!this.previousSource.has(sectionId)) this.previousSource.set(sectionId, current.source);
+      await this.atomicWrite(current.absolutePath, `${source}\n`);
+      return this.getSectionSummary(sectionId);
+    });
+  }
+
+  async keepSection(sectionId: string): Promise<FlockSectionSummary> {
+    return this.withMutation(sectionId, async () => {
+      await this.sectionRecord(sectionId);
+      this.previousSource.delete(sectionId);
+      return this.getSectionSummary(sectionId);
+    });
   }
 
   async revertSection(sectionId: string): Promise<FlockSectionSummary> {
-    const previous = this.previousSource.get(sectionId);
-    if (previous === undefined) throw new Error('No in-session version is available for this section.');
-    const current = await this.sectionRecord(sectionId);
-    const temporary = `${current.absolutePath}.flock-${process.pid}-${Date.now()}.tmp`;
+    return this.withMutation(sectionId, async () => {
+      const previous = this.previousSource.get(sectionId);
+      if (previous === undefined) {
+        throw new FlockProjectError('No in-session preview is available for this section.', 409, 'nothing_to_revert');
+      }
+      const current = await this.sectionRecord(sectionId);
+      await this.atomicWrite(current.absolutePath, previous);
+      this.previousSource.delete(sectionId);
+      return this.getSectionSummary(sectionId);
+    });
+  }
+
+  private async atomicWrite(absolutePath: string, source: string): Promise<void> {
+    const temporary = `${absolutePath}.flock-${process.pid}-${Date.now()}.tmp`;
     assertInside(this.root, temporary);
     try {
-      await writeFile(temporary, previous, 'utf8');
-      await rename(temporary, current.absolutePath);
-      this.previousSource.delete(sectionId);
+      await writeFile(temporary, source, 'utf8');
+      await rename(temporary, absolutePath);
     } finally {
       await unlink(temporary).catch(() => undefined);
     }
-    return this.getSectionSummary(sectionId);
-  }
-
-  hasRevert(sectionId: string): boolean {
-    return this.previousSource.has(sectionId);
   }
 
   private async getSectionSummary(sectionId: string): Promise<FlockSectionSummary> {
-    const summary = await this.summary(false);
-    const section = summary.sections.find((item) => item.id === sectionId);
-    if (!section) throw new Error(`Unknown Stitch section: ${sectionId}`);
+    const section = (await this.summary()).sections.find((item) => item.id === sectionId);
+    if (!section) throw new FlockProjectError(`Unknown Stitch section: ${sectionId}`, 404, 'unknown_section');
     return section;
   }
 }

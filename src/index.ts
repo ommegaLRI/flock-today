@@ -6,12 +6,12 @@ import { installFlockMiddleware } from './server.js';
 import type { FlockOptions } from './types.js';
 
 export type {
+  FlockEditIntent,
   FlockOptions,
+  FlockPreviewInput,
   FlockProjectSummary,
-  FlockSectionContext,
+  FlockSectionPacket,
   FlockSectionSummary,
-  GenerateSection,
-  GenerateSectionInput,
 } from './types.js';
 export { StitchProject } from './project.js';
 
@@ -21,10 +21,10 @@ export default function flock(options: FlockOptions = {}): AstroIntegration {
   return {
     name: '@flock/capsule',
     hooks: {
-      'astro:config:setup': ({ command, injectScript }) => {
-        if (command === 'dev') {
-          injectScript('page', `import '@flock/capsule/client';`);
-        }
+      'astro:config:setup': ({ command, injectScript, updateConfig }) => {
+        if (command !== 'dev') return;
+        updateConfig({ vite: { optimizeDeps: { exclude: ['@flock/capsule/client'] } } });
+        injectScript('page', `import '@flock/capsule/client';`);
       },
       'astro:config:done': ({ config }) => {
         astroRoot = fileURLToPath(config.root);
@@ -32,8 +32,8 @@ export default function flock(options: FlockOptions = {}): AstroIntegration {
       'astro:server:setup': async ({ server, logger }) => {
         const root = path.resolve(options.root ?? server.config.root ?? astroRoot);
         const project = await StitchProject.open(root);
-        installFlockMiddleware(server, project, options.generateSection);
-        logger.info(`Owner capsule active for ${root}`);
+        installFlockMiddleware(server, project);
+        logger.info(`Private owner editing active for ${root}`);
       },
     },
   };

@@ -1,5 +1,13 @@
 export type JsonObject = Record<string, unknown>;
 
+export interface FlockEditIntent {
+  goals: string[];
+  mayChangeContent: boolean;
+  mayChangeLinks: boolean;
+  mayChangeAssets: boolean;
+  mayChangeStructure: boolean;
+}
+
 export interface FlockSectionSummary {
   id: string;
   label?: string;
@@ -11,45 +19,23 @@ export interface FlockSectionSummary {
   currentHash: string;
   hasVisual: boolean;
   hasFailure: boolean;
+  canRevert: boolean;
 }
 
 export interface FlockProjectSummary {
   kind: 'flock.projectSummary';
-  version: '0.1.0';
+  version: '1.0.0';
   projectId: string;
   projectName?: string;
-  sourceUrl?: string;
-  contractVersion?: string;
-  contractHash?: string;
-  runHash?: string;
   stitchRunStatus?: string;
   projectionStatus?: string;
   publicationStatus?: string;
-  generatorAvailable: boolean;
   sections: FlockSectionSummary[];
 }
 
-export interface FlockVisualContext {
-  path: string;
-  mimeType?: string;
-  width?: number;
-  height?: number;
-}
-
-export interface FlockSectionContext {
-  kind: 'flock.sectionContext';
-  version: '0.1.0';
-  project: {
-    id: string;
-    name?: string;
-    sourceUrl?: string;
-    contractVersion?: string;
-    contractHash?: string;
-    runHash?: string;
-    framework?: string;
-    rendererTarget?: string;
-  };
-  page?: JsonObject;
+export interface FlockSectionPacket {
+  kind: 'flock.sectionPacket';
+  version: '1.0.0';
   section: {
     id: string;
     label?: string;
@@ -57,40 +43,38 @@ export interface FlockSectionContext {
     route?: string;
     file: string;
     source: string;
-    modified: boolean;
-    contract?: JsonObject;
+    baseHash: string;
   };
+  visibleContent: string[];
+  links: string[];
+  assets: string[];
+  contract?: JsonObject;
   facts: unknown[];
   occurrences: unknown[];
   recipes: unknown[];
-  tokens?: unknown;
+  tokens?: JsonObject;
   reviewItems: unknown[];
   failure?: unknown;
-  visual?: FlockVisualContext;
   constraints: {
     framework: 'astro';
     styling: 'tailwind';
     replacementUnit: 'complete-section-file';
     requiredSectionId: string;
     requiredRootAttribute: 'data-stitch-role="section"';
-    preserveProjectFilesOutsideSection: true;
+    preserveContentByDefault: true;
+    preserveLinksByDefault: true;
+    preserveAssetsByDefault: true;
+    noExternalScripts: true;
   };
 }
 
-export interface GenerateSectionInput {
-  instruction: string;
-  route: string;
-  context: FlockSectionContext;
+export interface FlockPreviewInput {
+  baseHash: string;
+  source: string;
+  intent: FlockEditIntent;
 }
 
-export type GenerateSection = (input: GenerateSectionInput) => Promise<string>;
-
 export interface FlockOptions {
-  /**
-   * Reserved seam for Flock's built-in AI. If absent, the capsule still installs,
-   * inspects sections, and reports that generation is not available.
-   */
-  generateSection?: GenerateSection;
   /** Project root override. Astro's root is used by default. */
   root?: string;
 }
