@@ -1,41 +1,17 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
-    "lib": ["ES2022", "DOM"],
-    "strict": true,
-    "noImplicitAny": true,
-    "noUncheckedIndexedAccess": true,
-    "exactOptionalPropertyTypes": true,
-    "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true,
-    "resolveJsonModule": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "isolatedModules": true,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "rootDir": "src",
+    "outDir": "dist",
     "declaration": true,
     "sourceMap": true,
-    "outDir": "dist",
-    "baseUrl": ".",
-    "paths": {
-      "@stitch/contract": ["packages/contract/src/index.ts"],
-      "@stitch/capture": ["packages/capture/src/index.ts"],
-      "@stitch/compiler": ["packages/compiler/src/index.ts"],
-      "@stitch/capsule": ["packages/capsule/src/index.ts"],
-      "@stitch/kernel": ["packages/kernel/src/index.ts"],
-      "@stitch/adapters": ["packages/adapters/src/index.ts"],
-      "@stitch/cli": ["packages/cli/src/index.ts"]
-    }
+    "strict": true,
+    "skipLibCheck": true,
+    "verbatimModuleSyntax": true,
+    "noUncheckedIndexedAccess": true
   },
-  "include": [
-    "apps/*/src/**/*.ts",
-    "packages/*/src/**/*.ts"
-  ],
-  "exclude": [
-    "dist",
-    "node_modules",
-    "templates",
-    "examples"
-  ]
+  "include": ["src/**/*.ts"]
 }

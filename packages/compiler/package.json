@@ -1,9 +1,0 @@
-{
-  "name": "@stitch/compiler",
-  "version": "0.1.0",
-  "type": "module",
-  "description": "Spec-first compiler from page captures to React campaign bundles.",
-  "exports": {
-    ".": "./src/index.ts"
-  }
-}

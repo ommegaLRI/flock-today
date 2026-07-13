@@ -1,20 +1,43 @@
 {
-  "name": "stitch",
+  "name": "@flock/capsule",
   "version": "0.1.0",
-  "private": true,
+  "description": "Owner-only AI section editing capsule for Stitch-generated Astro sites.",
   "type": "module",
-  "description": "Open-source campaign-site migration, design-contract generation, and private site capsule tooling.",
-  "scripts": {
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "build": "tsc -p tsconfig.json",
-    "check": "npm run typecheck",
-    "eval:bootstrap": "npm run build && node --loader ./tests/evals/stitch-dist-loader.mjs tests/evals/bootstrap-ingestion.mjs"
-  },
-  "workspaces": [
-    "apps/*",
-    "packages/*"
+  "license": "MIT",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
+  "bin": {
+    "flock": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./client": "./dist/client.js",
+    "./project": {
+      "types": "./dist/project.d.ts",
+      "import": "./dist/project.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "node ./scripts/build.mjs",
+    "test": "npm run build && node --test",
+    "check": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "astro": ">=5 <6"
+  },
   "devDependencies": {
-    "typescript": "^5.8.3"
+    "@types/node": "^22.0.0",
+    "astro": "^5.0.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
   }
 }

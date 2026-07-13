@@ -1,9 +1,0 @@
-{
-  "name": "@stitch/kernel",
-  "version": "0.1.0",
-  "type": "module",
-  "description": "User-owned patch planning, intent mapping, and safety evaluation.",
-  "exports": {
-    ".": "./src/index.ts"
-  }
-}

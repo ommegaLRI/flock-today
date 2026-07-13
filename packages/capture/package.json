@@ -1,9 +1,0 @@
-{
-  "name": "@stitch/capture",
-  "version": "0.1.0",
-  "type": "module",
-  "description": "Privacy-aware page capture primitives.",
-  "exports": {
-    ".": "./src/index.ts"
-  }
-}
