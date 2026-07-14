@@ -22,6 +22,8 @@ export interface FlockSectionSummary {
   canRevert: boolean;
 }
 
+export type FlockInferenceProvider = 'local' | 'openai';
+
 export interface FlockProjectSummary {
   kind: 'flock.projectSummary';
   version: '1.0.0';
@@ -31,6 +33,10 @@ export interface FlockProjectSummary {
   projectionStatus?: string;
   publicationStatus?: string;
   sections: FlockSectionSummary[];
+  inference?: {
+    openaiAvailable: boolean;
+    openaiModel?: string;
+  };
 }
 
 export interface FlockSectionPacket {
@@ -77,4 +83,9 @@ export interface FlockPreviewInput {
 export interface FlockOptions {
   /** Project root override. Astro's root is used by default. */
   root?: string;
+  /** Optional connected inference. The API key defaults to OPENAI_API_KEY. */
+  openai?: {
+    apiKey?: string;
+    model?: string;
+  };
 }

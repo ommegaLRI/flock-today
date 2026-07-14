@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import type { AstroIntegration } from 'astro';
 import { StitchProject } from './project.js';
 import { installFlockMiddleware } from './server.js';
+import { OpenAIInference } from './inference/openai.js';
 import type { FlockOptions } from './types.js';
 
 export type {
@@ -32,7 +33,7 @@ export default function flock(options: FlockOptions = {}): AstroIntegration {
       'astro:server:setup': async ({ server, logger }) => {
         const root = path.resolve(options.root ?? server.config.root ?? astroRoot);
         const project = await StitchProject.open(root);
-        installFlockMiddleware(server, project);
+        installFlockMiddleware(server, project, new OpenAIInference(options.openai));
         logger.info(`Private owner editing active for ${root}`);
       },
     },

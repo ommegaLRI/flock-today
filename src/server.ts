@@ -4,6 +4,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { ViteDevServer } from 'vite';
 import { FlockProjectError, StitchProject } from './project.js';
 import type { FlockEditIntent, FlockPreviewInput } from './types.js';
+import { OpenAIInference, type OpenAIInferenceAction } from './inference/openai.js';
 
 const API_PREFIX = '/_flock/api';
 const MAX_BODY_BYTES = 256 * 1024;
@@ -83,12 +84,12 @@ function parseIntent(value: unknown): FlockEditIntent {
 }
 
 function sectionRoute(pathname: string): { id: string; action: string } | undefined {
-  const match = pathname.match(/^\/_flock\/api\/sections\/([^/]+)\/(context|preview|keep|revert)$/);
+  const match = pathname.match(/^\/_flock\/api\/sections\/([^/]+)\/(context|infer|preview|keep|revert)$/);
   if (!match?.[1] || !match[2]) return undefined;
   return { id: decodeURIComponent(match[1]), action: match[2] };
 }
 
-export function installFlockMiddleware(server: ViteDevServer, project: StitchProject): void {
+export function installFlockMiddleware(server: ViteDevServer, project: StitchProject, openai: OpenAIInference): void {
   server.middlewares.use(async (request, response, next) => {
     const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`);
     if (!url.pathname.startsWith(API_PREFIX)) return next();
@@ -97,7 +98,11 @@ export function installFlockMiddleware(server: ViteDevServer, project: StitchPro
 
     try {
       if (request.method === 'GET' && url.pathname === `${API_PREFIX}/project`) {
-        return sendJson(response, 200, await project.summary());
+        const summary = await project.summary();
+        return sendJson(response, 200, {
+          ...summary,
+          inference: { openaiAvailable: openai.available, openaiModel: openai.available ? openai.model : undefined },
+        });
       }
 
       if (request.method === 'GET' && url.pathname.startsWith(`${API_PREFIX}/visual/`)) {
@@ -116,6 +121,29 @@ export function installFlockMiddleware(server: ViteDevServer, project: StitchPro
 
       if (request.method === 'GET' && route.action === 'context') {
         return sendJson(response, 200, await project.packet(route.id));
+      }
+
+      if (request.method === 'POST' && route.action === 'infer') {
+        const body = await readJsonBody(request);
+        const action = body.action;
+        if (action !== 'interpret' && action !== 'generate' && action !== 'repair') {
+          throw new FlockProjectError('Unknown inference action.', 400, 'invalid_inference_action');
+        }
+        if (typeof body.instruction !== 'string' || !body.instruction.trim()) {
+          throw new FlockProjectError('instruction is required.', 400, 'invalid_instruction');
+        }
+        const packet = await project.packet(route.id);
+        const inferenceInput = {
+          action: action as OpenAIInferenceAction,
+          instruction: body.instruction,
+          ...(action === 'interpret' ? {} : { intent: parseIntent(body.intent) }),
+          ...(typeof body.candidate === 'string' ? { candidate: body.candidate } : {}),
+          ...(Array.isArray(body.failures)
+            ? { failures: body.failures.filter((value): value is string => typeof value === 'string') }
+            : {}),
+        };
+        const result = await openai.run(packet, inferenceInput);
+        return sendJson(response, 200, { result, model: openai.model });
       }
 
       if (request.method === 'POST' && route.action === 'preview') {

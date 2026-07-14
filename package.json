@@ -44,6 +44,7 @@
   },
   "dependencies": {
     "@astrojs/compiler": "^4.0.0",
-    "@mlc-ai/web-llm": "^0.2.84"
+    "@mlc-ai/web-llm": "^0.2.84",
+    "openai": "^6.46.0"
   }
 }
