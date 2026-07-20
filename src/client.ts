@@ -1,4 +1,5 @@
 import type {
+  FlockAsset,
   FlockEditIntent,
   FlockInferenceProvider,
   FlockProjectSummary,
@@ -16,6 +17,15 @@ const DEV_KEY = 'flock:dev-mode';
 const PROVIDER_KEY = 'flock:inference-provider';
 const MAX_DEV_LOGS = 500;
 const MAX_DEV_DETAIL_CHARS = 500_000;
+const MAX_ASSET_BYTES = 5 * 1024 * 1024;
+const MAX_ASSETS_PER_SECTION = 4;
+
+interface PendingAsset {
+  file: File;
+  mimeType: FlockAsset['mimeType'];
+  previewUrl?: string;
+  uploaded?: FlockAsset;
+}
 
 interface ClientDevLogEvent {
   type: 'client' | 'network' | 'validation' | 'browser';
@@ -66,7 +76,7 @@ function styles(): string {
   return `
     :host { all: initial; color-scheme: light; }
     * { box-sizing: border-box; }
-    button, textarea { font: inherit; }
+    button, textarea, input { font: inherit; }
     button { -webkit-tap-highlight-color: transparent; }
     .launch { position: fixed; right: 18px; bottom: 18px; z-index: 2147483647; border: 0; border-radius: 8px; padding: 12px 17px; background: #2B160A; color: white; box-shadow: 0 12px 40px rgba(0,0,0,.28); cursor: pointer; font: 650 14px/1 system-ui, sans-serif; }
     .panel, .dev-panel { position: fixed; bottom: 14px; z-index: 2147483647; height: 600px; display: flex; flex-direction: column; background: #F8F6F0; border-radius: 8px; box-shadow: 0 24px 80px rgba(22,18,45,.3); overflow: hidden; font: 14px/1.45 system-ui, sans-serif; color: #181622; }
@@ -85,7 +95,23 @@ function styles(): string {
     .hint { margin: 0; color: #6f6a7c; }
     .section { display: grid; gap: 11px; }
     .section h2 { margin: 0; font-size: 17px; line-height: 1.25; }
-    img { width: 100%; max-height: 190px; object-fit: cover; border-radius: 8px; border: 1px solid #ded9eb; }
+    .visual { width: 100%; max-height: 190px; object-fit: cover; border-radius: 8px; border: 1px solid #ded9eb; }
+    .asset-picker { display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px dashed #bdb5d3; border-radius: 8px; padding: 11px; background: white; cursor: pointer; }
+    .asset-picker.dragging { border-color: #5B4BFF; box-shadow: 0 0 0 3px rgba(91,75,255,.12); }
+    .asset-picker.disabled { opacity: .5; cursor: not-allowed; }
+    .asset-picker input { display: none; }
+    .asset-picker strong { display: block; color: #322e40; font-size: 12px; }
+    .asset-picker span { display: block; color: #777181; font-size: 10px; }
+    .asset-choose { flex: none; border: 1px solid #cbc5de; border-radius: 4px; padding: 7px 9px; background: #F8F6F0; color: #322e40; cursor: pointer; font-size: 11px; font-weight: 700; }
+    .asset-list { display: grid; gap: 7px; }
+    .asset-item { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; align-items: center; gap: 9px; border: 1px solid #ded9eb; border-radius: 7px; padding: 7px; background: white; }
+    .asset-thumb { width: 42px; height: 42px; object-fit: cover; border-radius: 5px; border: 1px solid #ebe7f4; background: #f2efe8; }
+    .asset-placeholder { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 5px; background: #f2efe8; color: #625e70; font-size: 10px; font-weight: 800; }
+    .asset-copy { min-width: 0; }
+    .asset-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #322e40; font-size: 11px; font-weight: 700; }
+    .asset-meta { color: #777181; font-size: 10px; }
+    .asset-remove { border: 0; background: transparent; color: #777181; cursor: pointer; padding: 5px; font-size: 16px; }
+
     textarea { width: 100%; min-height: 126px; resize: vertical; border: 1px solid #cbc5de; border-radius: 8px; padding: 11px; background: white; color: #181622; outline: none; }
     textarea:focus { border-color: #2B160A; box-shadow: 0 0 0 3px rgba(91,75,255,.12); }
     .actions { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; }
@@ -190,6 +216,26 @@ function sectionEndpoint(sectionId: string, action: string): string {
   return `${API}/sections/${encodeURIComponent(sectionId)}/${action}`;
 }
 
+function fileBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener('load', () => {
+      const result = typeof reader.result === 'string' ? reader.result : '';
+      const comma = result.indexOf(',');
+      if (comma < 0) reject(new Error(`Could not read ${file.name}.`));
+      else resolve(result.slice(comma + 1));
+    }, { once: true });
+    reader.addEventListener('error', () => reject(reader.error ?? new Error(`Could not read ${file.name}.`)), { once: true });
+    reader.readAsDataURL(file);
+  });
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
 function boot(): void {
   if (document.getElementById(HOST_ID)) return;
   ensurePageStyle();
@@ -214,6 +260,12 @@ function boot(): void {
         <div class="section hidden">
           <h2></h2>
           <img class="visual hidden" alt="Original Stitch section crop" />
+          <div class="asset-picker" role="button" tabindex="0" aria-label="Add PNG or SVG assets">
+            <input class="asset-input" type="file" accept=".png,.svg,image/png,image/svg+xml" multiple />
+            <div><strong>Add assets</strong><span>Drop PNG or SVG files here · 5 MB max</span></div>
+            <button class="asset-choose" type="button">Choose</button>
+          </div>
+          <div class="asset-list"></div>
           <textarea placeholder="Describe the change you want…"></textarea>
           <div class="actions">
             <button class="primary generate" type="button">Preview</button>
@@ -247,6 +299,10 @@ function boot(): void {
   const sectionPanel = shadow.querySelector<HTMLElement>('.section')!;
   const heading = shadow.querySelector<HTMLElement>('h2')!;
   const visual = shadow.querySelector<HTMLImageElement>('.visual')!;
+  const assetPicker = shadow.querySelector<HTMLElement>('.asset-picker')!;
+  const assetInput = shadow.querySelector<HTMLInputElement>('.asset-input')!;
+  const assetChoose = shadow.querySelector<HTMLButtonElement>('.asset-choose')!;
+  const assetList = shadow.querySelector<HTMLElement>('.asset-list')!;
   const textarea = shadow.querySelector<HTMLTextAreaElement>('textarea')!;
   const generate = shadow.querySelector<HTMLButtonElement>('.generate')!;
   const keep = shadow.querySelector<HTMLButtonElement>('.keep')!;
@@ -264,6 +320,7 @@ function boot(): void {
   let provider: FlockInferenceProvider = sessionStorage.getItem(PROVIDER_KEY) === 'openai' ? 'openai' : 'local';
   let devRenderPending = false;
   const devLogs: DevLogEvent[] = [];
+  const pendingAssets = new Map<string, PendingAsset[]>();
 
   const setMessage = (value: string, error = false): void => {
     message.textContent = value;
@@ -413,14 +470,106 @@ function boot(): void {
     }
   };
 
+  const assetsFor = (sectionId = selected?.id): PendingAsset[] => {
+    if (!sectionId) return [];
+    return pendingAssets.get(sectionId) ?? [];
+  };
+
+  const clearAssets = (sectionId: string): void => {
+    const assets = pendingAssets.get(sectionId) ?? [];
+    for (const asset of assets) if (asset.previewUrl) URL.revokeObjectURL(asset.previewUrl);
+    pendingAssets.delete(sectionId);
+    if (selected?.id === sectionId) assetList.innerHTML = '';
+  };
+
+  const renderAssets = (): void => {
+    const assets = assetsFor();
+    const locked = busy || Boolean(selected?.canRevert);
+    assetList.innerHTML = assets.map((entry, index) => {
+      const preview = entry.uploaded?.publicUrl ?? entry.previewUrl;
+      const thumbnail = preview
+        ? `<img class="asset-thumb" src="${escapeHtml(preview)}" alt="" />`
+        : '<div class="asset-placeholder">SVG</div>';
+      const state = entry.uploaded ? 'Staged' : 'Ready to upload';
+      return `<div class="asset-item">${thumbnail}<div class="asset-copy"><div class="asset-name">${escapeHtml(entry.file.name)}</div><div class="asset-meta">${escapeHtml(`${state} · ${formatBytes(entry.file.size)}`)}</div></div><button class="asset-remove" type="button" data-asset-index="${index}" aria-label="Remove ${escapeHtml(entry.file.name)}" ${locked ? 'disabled' : ''}>×</button></div>`;
+    }).join('');
+  };
+
+  const addAssetFiles = (files: File[]): void => {
+    if (!selected) return setMessage('Select a section first.', true);
+    if (busy || selected.canRevert) return;
+    const assets = assetsFor(selected.id);
+    for (const file of files) {
+      if (assets.length >= MAX_ASSETS_PER_SECTION) {
+        setMessage(`A section can use up to ${MAX_ASSETS_PER_SECTION} uploaded assets at once.`, true);
+        break;
+      }
+      const lowerName = file.name.toLowerCase();
+      const mimeType: FlockAsset['mimeType'] | undefined = file.type === 'image/png' || lowerName.endsWith('.png')
+        ? 'image/png'
+        : file.type === 'image/svg+xml' || lowerName.endsWith('.svg')
+          ? 'image/svg+xml'
+          : undefined;
+      if (!mimeType) {
+        setMessage(`${file.name} is not a PNG or SVG.`, true);
+        continue;
+      }
+      if (!file.size || file.size > MAX_ASSET_BYTES) {
+        setMessage(`${file.name} must be smaller than 5 MB.`, true);
+        continue;
+      }
+      if (assets.some((entry) => entry.file.name === file.name && entry.file.size === file.size && entry.file.lastModified === file.lastModified)) continue;
+      assets.push({
+        file,
+        mimeType,
+        previewUrl: mimeType === 'image/png' ? URL.createObjectURL(file) : undefined,
+      });
+    }
+    if (assets.length) pendingAssets.set(selected.id, assets);
+    renderAssets();
+    if (assets.length) setMessage('Asset ready. Describe how it should be used, then preview.');
+  };
+
+  const uploadAssets = async (sectionId: string, onLog?: DevLogger): Promise<FlockAsset[]> => {
+    const assets = assetsFor(sectionId);
+    for (let index = 0; index < assets.length; index += 1) {
+      const entry = assets[index]!;
+      if (entry.uploaded) continue;
+      setMessage(`Uploading ${entry.file.name}…`);
+      const dataBase64 = await fileBase64(entry.file);
+      const result = await jsonFetch<{ asset: FlockAsset }>(sectionEndpoint(sectionId, 'assets'), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ filename: entry.file.name, mimeType: entry.mimeType, dataBase64 }),
+      }, onLog);
+      entry.uploaded = result.asset;
+      renderAssets();
+    }
+    return assets.map((entry) => entry.uploaded).filter((asset): asset is FlockAsset => Boolean(asset));
+  };
+
+  const discardUploadedAssets = async (sectionId: string, onLog?: DevLogger): Promise<void> => {
+    const assets = assetsFor(sectionId);
+    if (!assets.some((entry) => entry.uploaded)) return;
+    await jsonFetch<{ discarded: true }>(sectionEndpoint(sectionId, 'assets'), { method: 'DELETE' }, onLog);
+    for (const entry of assets) entry.uploaded = undefined;
+    renderAssets();
+  };
+
   const setBusy = (value: boolean): void => {
     busy = value;
-    textarea.disabled = value;
-    generate.disabled = value || !selected;
+    const previewActive = Boolean(selected?.canRevert);
+    textarea.disabled = value || previewActive;
+    assetInput.disabled = value || previewActive || !selected;
+    assetChoose.disabled = value || previewActive || !selected;
+    assetPicker.classList.toggle('disabled', assetInput.disabled);
+    assetPicker.setAttribute('aria-disabled', String(assetInput.disabled));
+    generate.disabled = value || !selected || previewActive;
     keep.disabled = value || !selected?.canRevert;
     revert.disabled = value || !selected?.canRevert;
     devToggle.disabled = value;
     providerToggle.disabled = value;
+    renderAssets();
   };
 
 
@@ -538,6 +687,55 @@ function boot(): void {
     scheduleDevRender();
   });
 
+  const chooseAssets = (): void => {
+    if (!assetInput.disabled) assetInput.click();
+  };
+  assetChoose.addEventListener('click', (event) => {
+    event.stopPropagation();
+    chooseAssets();
+  });
+  assetPicker.addEventListener('click', chooseAssets);
+  assetPicker.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    chooseAssets();
+  });
+  assetPicker.addEventListener('dragover', (event) => {
+    if (assetInput.disabled) return;
+    event.preventDefault();
+    assetPicker.classList.add('dragging');
+  });
+  assetPicker.addEventListener('dragleave', () => assetPicker.classList.remove('dragging'));
+  assetPicker.addEventListener('drop', (event) => {
+    assetPicker.classList.remove('dragging');
+    if (assetInput.disabled) return;
+    event.preventDefault();
+    addAssetFiles(event.dataTransfer ? [...event.dataTransfer.files] : []);
+  });
+  assetInput.addEventListener('change', () => {
+    addAssetFiles([...(assetInput.files ?? [])]);
+    assetInput.value = '';
+  });
+  assetList.addEventListener('click', async (event) => {
+    const button = event.target instanceof Element ? event.target.closest<HTMLButtonElement>('[data-asset-index]') : null;
+    if (!button || !selected || busy || selected.canRevert) return;
+    const index = Number(button.dataset.assetIndex);
+    const assets = assetsFor(selected.id);
+    const entry = assets[index];
+    if (!entry) return;
+    if (entry.uploaded) {
+      try {
+        await discardUploadedAssets(selected.id, devMode ? appendDevLog : undefined);
+      } catch (error) {
+        return setMessage(error instanceof Error ? error.message : String(error), true);
+      }
+    }
+    if (entry.previewUrl) URL.revokeObjectURL(entry.previewUrl);
+    assets.splice(index, 1);
+    if (!assets.length) pendingAssets.delete(selected.id);
+    renderAssets();
+  });
+
   document.addEventListener('click', (event) => {
     if (!editing || busy || event.composedPath().includes(host)) return;
     const target = event.target instanceof Element
@@ -559,17 +757,26 @@ function boot(): void {
     if (!instruction) return setMessage('Describe the change first.', true);
     const sectionId = selected.id;
     const runStartedAt = performance.now();
+    let previewApplied = false;
     const onLog: DevLogger | undefined = devMode ? appendDevLog : undefined;
     onLog?.({
       type: 'client',
       phase: 'preview-run-start',
       timestamp: Date.now(),
       message: 'Started a complete Flock preview run.',
-      details: { sectionId, instruction, instructionCharacters: instruction.length },
+      details: { sectionId, instruction, instructionCharacters: instruction.length, assetCount: assetsFor(sectionId).length },
     });
     setBusy(true);
     setMessage('Compiling section intelligence…');
     try {
+      const uploadedAssets = await uploadAssets(sectionId, onLog);
+      const effectiveInstruction = uploadedAssets.length
+        ? [
+            instruction,
+            'Use the uploaded asset or assets as requested. Reference their exact local public URLs; do not invent imports or remote URLs.',
+            ...uploadedAssets.map((asset) => `- ${asset.filename}: ${asset.publicUrl}`),
+          ].join('\n\n')
+        : instruction;
       const contextStartedAt = performance.now();
       onLog?.({
         type: 'client',
@@ -608,7 +815,7 @@ function boot(): void {
         const response = await jsonFetch<{ result: T; model: string }>(sectionEndpoint(sectionId, 'infer'), {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ action, instruction, ...extra }),
+          body: JSON.stringify({ action, instruction: effectiveInstruction, ...extra }),
         }, onLog);
         onLog?.({ type: 'client', phase: 'openai-result', timestamp: Date.now(), message: `OpenAI ${action} completed.`, details: { model: response.model } });
         return response.result;
@@ -622,8 +829,12 @@ function boot(): void {
       }
 
       const intent: FlockEditIntent = provider === 'local'
-        ? await local!.interpretInstruction(packet, instruction, onStatus, onLog)
+        ? await local!.interpretInstruction(packet, effectiveInstruction, onStatus, onLog)
         : await apiInference<FlockEditIntent>('interpret');
+      if (uploadedAssets.length) {
+        intent.mayChangeAssets = true;
+        if (!intent.goals.includes('Use uploaded assets')) intent.goals.push('Use uploaded assets');
+      }
       onLog?.({
         type: 'client',
         phase: 'intent-ready',
@@ -633,7 +844,7 @@ function boot(): void {
         details: { intent },
       });
       let candidate = provider === 'local'
-        ? await local!.generateCandidate(packet, instruction, intent, onStatus, onLog)
+        ? await local!.generateCandidate(packet, effectiveInstruction, intent, onStatus, onLog)
         : await apiInference<string>('generate', { intent });
       onLog?.({
         type: 'client',
@@ -672,6 +883,7 @@ function boot(): void {
             durationMs: Math.round(performance.now() - validationStartedAt),
             message: 'The candidate passed validation and was written for preview.',
           });
+          previewApplied = true;
           updateSection(result.section);
           setMessage('Preview applied. Keep it or revert it.');
           onLog?.({
@@ -707,7 +919,7 @@ function boot(): void {
               failures: error.failures,
             });
             candidate = provider === 'local'
-              ? await local!.repairCandidate(packet, instruction, intent, candidate, error.failures, onStatus, onLog)
+              ? await local!.repairCandidate(packet, effectiveInstruction, intent, candidate, error.failures, onStatus, onLog)
               : await apiInference<string>('repair', { intent, candidate, failures: error.failures });
             continue;
           }
@@ -715,6 +927,19 @@ function boot(): void {
         }
       }
     } catch (error) {
+      if (!previewApplied) {
+        try {
+          await discardUploadedAssets(sectionId, onLog);
+        } catch (cleanupError) {
+          onLog?.({
+            type: 'client',
+            phase: 'asset-cleanup-error',
+            timestamp: Date.now(),
+            message: 'Could not discard staged assets after the failed preview run.',
+            error: cleanupError instanceof Error ? cleanupError.stack || cleanupError.message : String(cleanupError),
+          });
+        }
+      }
       onLog?.({
         type: 'client',
         phase: 'preview-run-error',
@@ -744,16 +969,18 @@ function boot(): void {
 
   keep.addEventListener('click', async () => {
     if (!selected || busy) return;
+    const sectionId = selected.id;
     setBusy(true);
     setMessage('Keeping preview…');
     try {
-      const result = await jsonFetch<{ section: FlockSectionSummary }>(sectionEndpoint(selected.id, 'keep'), {
+      const result = await jsonFetch<{ section: FlockSectionSummary }>(sectionEndpoint(sectionId, 'keep'), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: '{}',
       }, devMode ? appendDevLog : undefined);
       updateSection(result.section);
-      setMessage('Kept. Git remains the durable history.');
+      clearAssets(sectionId);
+      setMessage('Kept. Asset and section changes are now part of the project.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error), true);
     } finally {
@@ -763,16 +990,18 @@ function boot(): void {
 
   revert.addEventListener('click', async () => {
     if (!selected || busy) return;
+    const sectionId = selected.id;
     setBusy(true);
     setMessage('Reverting preview…');
     try {
-      const result = await jsonFetch<{ section: FlockSectionSummary }>(sectionEndpoint(selected.id, 'revert'), {
+      const result = await jsonFetch<{ section: FlockSectionSummary }>(sectionEndpoint(sectionId, 'revert'), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: '{}',
       }, devMode ? appendDevLog : undefined);
       updateSection(result.section);
-      setMessage('Preview reverted.');
+      clearAssets(sectionId);
+      setMessage('Preview and staged assets reverted.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error), true);
     } finally {

@@ -808,7 +808,7 @@ export async function generateCandidate(
         'You are Flock, a private in-browser editor for one Astro section.',
         'Return exactly the complete replacement .astro file and nothing else.',
         'Preserve existing imports, project conventions, text, links, assets, accessibility identities, and data-stitch attributes unless explicitly authorized.',
-        'Use existing Astro and Tailwind patterns. Do not add dependencies, remote scripts, markdown fences, or explanations.',
+        'Use existing Astro and Tailwind patterns. When uploadedAssets are present, use their exact publicUrl values directly in src, poster, or CSS url() references; do not invent imports or remote URLs. Do not add dependencies, remote scripts, markdown fences, or explanations.',
       ].join(' '),
     },
     {
@@ -836,7 +836,7 @@ export async function repairCandidate(
   return streamSource('repair', [
     {
       role: 'system',
-      content: 'Repair one Astro section. Return exactly the complete corrected .astro file. Do not explain, add dependencies, or add external scripts.',
+      content: 'Repair one Astro section. Return exactly the complete corrected .astro file. Preserve and use exact uploadedAssets publicUrl values when requested. Do not explain, add dependencies, or add external scripts.',
     },
     {
       role: 'user',

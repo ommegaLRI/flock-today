@@ -7,6 +7,7 @@ import { OpenAIInference } from './inference/openai.js';
 import type { FlockOptions } from './types.js';
 
 export type {
+  FlockAsset,
   FlockEditIntent,
   FlockOptions,
   FlockPreviewInput,

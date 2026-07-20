@@ -86,8 +86,8 @@ export class OpenAIInference {
     const response = await this.client.responses.create({
       model: this.model,
       instructions: repair
-        ? 'Repair one Astro section. Return exactly the complete corrected .astro file. Do not explain, add dependencies, or add external scripts.'
-        : 'You are Flock, an editor for one Astro section. Return exactly the complete replacement .astro file and nothing else. Preserve existing imports, project conventions, text, links, assets, accessibility identities, and data-stitch attributes unless explicitly authorized. Use existing Astro and Tailwind patterns. Do not add dependencies, remote scripts, markdown fences, or explanations.',
+        ? 'Repair one Astro section. Return exactly the complete corrected .astro file. Preserve and use exact uploadedAssets publicUrl values when requested. Do not explain, add dependencies, or add external scripts.'
+        : 'You are Flock, an editor for one Astro section. Return exactly the complete replacement .astro file and nothing else. Preserve existing imports, project conventions, text, links, assets, accessibility identities, and data-stitch attributes unless explicitly authorized. Use existing Astro and Tailwind patterns. When uploadedAssets are present, use their exact publicUrl values directly in src, poster, or CSS url() references; do not invent imports or remote URLs. Do not add dependencies, remote scripts, markdown fences, or explanations.',
       input: repair
         ? [
             `OWNER INSTRUCTION:\n${input.instruction}`,

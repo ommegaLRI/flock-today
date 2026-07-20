@@ -1,5 +1,6 @@
 import { access, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { StitchProject } from './project.js';
 
 const IMPORT_LINE = `import flock from '@flock/capsule';`;
 const CONFIG_FILES = ['astro.config.mjs', 'astro.config.mts', 'astro.config.js', 'astro.config.ts'];
@@ -41,12 +42,10 @@ export function patchAstroConfig(source: string): string {
 
 export async function installFlock(root = process.cwd()): Promise<{ configPath: string; changed: boolean }> {
   const projectRoot = path.resolve(root);
-  if (!(await exists(path.join(projectRoot, '.stitch', 'manifest.json')))) {
-    throw new Error('Flock can only be installed in a Stitch-generated project. Missing .stitch/manifest.json.');
-  }
   const configName = (await Promise.all(CONFIG_FILES.map(async (name) => ({ name, present: await exists(path.join(projectRoot, name)) }))))
     .find((entry) => entry.present)?.name;
   if (!configName) throw new Error('Could not find an Astro config file.');
+  await StitchProject.open(projectRoot);
 
   const configPath = path.join(projectRoot, configName);
   const source = await readFile(configPath, 'utf8');

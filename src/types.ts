@@ -1,5 +1,19 @@
 export type JsonObject = Record<string, unknown>;
 
+export interface FlockAsset {
+  id: string;
+  filename: string;
+  mimeType: "image/png" | "image/svg+xml";
+  byteLength: number;
+  width?: number;
+  height?: number;
+  localPath: string;
+  publicUrl: string;
+  origin: "flock-upload";
+  uploadedAt: string;
+  contentHash: string;
+}
+
 export interface FlockEditIntent {
   goals: string[];
   mayChangeContent: boolean;
@@ -22,11 +36,11 @@ export interface FlockSectionSummary {
   canRevert: boolean;
 }
 
-export type FlockInferenceProvider = 'local' | 'openai';
+export type FlockInferenceProvider = "local" | "openai";
 
 export interface FlockProjectSummary {
-  kind: 'flock.projectSummary';
-  version: '1.0.0';
+  kind: "flock.projectSummary";
+  version: "1.0.0";
   projectId: string;
   projectName?: string;
   stitchRunStatus?: string;
@@ -40,8 +54,8 @@ export interface FlockProjectSummary {
 }
 
 export interface FlockSectionPacket {
-  kind: 'flock.sectionPacket';
-  version: '1.0.0';
+  kind: "flock.sectionPacket";
+  version: "1.0.0";
   section: {
     id: string;
     label?: string;
@@ -54,6 +68,7 @@ export interface FlockSectionPacket {
   visibleContent: string[];
   links: string[];
   assets: string[];
+  uploadedAssets: FlockAsset[];
   contract?: JsonObject;
   facts: unknown[];
   occurrences: unknown[];
@@ -62,9 +77,9 @@ export interface FlockSectionPacket {
   reviewItems: unknown[];
   failure?: unknown;
   constraints: {
-    framework: 'astro';
-    styling: 'tailwind';
-    replacementUnit: 'complete-section-file';
+    framework: "astro";
+    styling: "tailwind";
+    replacementUnit: "complete-section-file";
     requiredSectionId: string;
     requiredRootAttribute: 'data-stitch-role="section"';
     preserveContentByDefault: true;
