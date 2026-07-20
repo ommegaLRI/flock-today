@@ -59,13 +59,13 @@ function ensurePageStyle(): void {
   style.id = PAGE_STYLE_ID;
   style.textContent = `
     html[data-flock-editing="true"] [data-stitch-role="section"][data-section-id] {
-      outline: 2px dashed rgba(91, 75, 255, .72) !important;
+      outline: 2px dashed rgba(119, 131, 114) !important;
       outline-offset: -2px !important;
       cursor: pointer !important;
     }
     html[data-flock-editing="true"] [data-stitch-role="section"][data-section-id]:hover,
     [data-flock-selected="true"] {
-      outline: 4px solid rgb(91, 75, 255) !important;
+      outline: 4px solid rgb(119, 131, 114) !important;
       outline-offset: -4px !important;
     }
   `;
