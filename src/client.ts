@@ -80,51 +80,57 @@ function styles(): string {
     button { -webkit-tap-highlight-color: transparent; }
     .launch { position: fixed; right: 18px; bottom: 18px; display: flex; align-items: center; justify-content: center; width: 56px; height: 56px; padding: 0; border: 0; border-radius: 6px; background: #2B160A; cursor: pointer; box-shadow: 0 12px 40px rgba(0,0,0,.28); }
     .launch-logo { width: 34px; height: 34px; object-fit: contain; pointer-events: none; }
-    .panel, .dev-panel { position: fixed; bottom: 14px; z-index: 2147483647; height: 600px; display: flex; flex-direction: column; background: #F8F6F0; border-radius: 6px; box-shadow: 0 24px 80px rgba(22,18,45,.3); overflow: hidden; font: 14px/1.45 system-ui, sans-serif; color: #181622; }
+    .panel, .dev-panel { position: fixed; bottom: 14px; z-index: 2147483647; height: 440px; display: flex; flex-direction: column; background: #F8F6F0; border-radius: 6px; box-shadow: 0 24px 80px rgba(22,18,45,.3); overflow: hidden; font: 14px/1.45 system-ui, sans-serif; color: #181622; }
     .panel { right: 14px; width: min(410px, calc(100vw - 28px)); }
     .dev-panel { right: 438px; width: min(560px, calc(100vw - 466px)); }
     .hidden { display: none !important; }
     header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 15px 16px; border-bottom: 1px solid #e6e2f2; }
-    header strong { font-size: 15px; }
+    .section-title { margin: 2px; font-size: 15px;}
     .header-actions { display: flex; align-items: center; gap: 12px; }
     .header-logo { height: 30px; width: auto; display: block; }
     .icon { border: 0; background: transparent; color: #625e70; cursor: pointer; padding: 4px; font-size: 20px; }
     .body { padding: 16px; overflow: auto; display: grid; gap: 14px; }
     .status { display: flex; flex-wrap: wrap; gap: 6px; }
-    .badge { display: inline-flex; border-radius: 4px; padding: 4px 8px; background: #F1EBDF; color: #4a4560; font-size: 11px; font-weight: 500; }
+    .badge { display: inline-flex; border-radius: 6px; padding: 4px 8px; background: #F1EBDF; color: #4a4560; font-size: 11px; font-weight: 500; }
     .badge.modified { background: #fff0c7; color: #6c4b00; }
     .badge.preview { background: #dff6e9; color: #145a32; }
     .hint { margin: 0; color: #6f6a7c; }
     .section { display: grid; gap: 11px; }
     .section h2 { margin: 0; font-size: 17px; line-height: 1.25; }
-    .visual { width: 100%; max-height: 190px; object-fit: cover; border-radius: 8px; border: 1px solid #ded9eb; }
-    .asset-picker { display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px dashed #bdb5d3; border-radius: 8px; padding: 11px; background: white; cursor: pointer; }
-    .asset-picker.dragging { border-color: #5B4BFF; box-shadow: 0 0 0 3px rgba(91,75,255,.12); }
-    .asset-picker.disabled { opacity: .5; cursor: not-allowed; }
+    .visual { width: 100%; max-height: 190px; object-fit: cover; border-radius: 6px; border: 1px solid #ded9eb; }
+    .asset-picker { position: relative; display: grid; overflow: hidden; border: 1px solid #cbc5de; border-radius: 6px; background: white; transition: border-color .15s ease, box-shadow .15s ease, background .15s ease; }
+    .asset-picker:focus-within { border-color: #2B160A; box-shadow: 0 0 0 3px rgba(91,75,255,.12); }
+    .asset-picker.dragging { border-color: #5B4BFF; background: #f7f5ff; box-shadow: 0 0 0 3px rgba(91,75,255,.16); }
+    .asset-picker.disabled { opacity: .5; }
     .asset-picker input { display: none; }
-    .asset-picker strong { display: block; color: #322e40; font-size: 12px; }
-    .asset-picker span { display: block; color: #777181; font-size: 10px; }
-    .asset-choose { flex: none; border: 1px solid #cbc5de; border-radius: 4px; padding: 7px 9px; background: #F8F6F0; color: #322e40; cursor: pointer; font-size: 11px; font-weight: 700; }
+    .asset-picker textarea { min-height: 126px; margin: 0; border: 0; border-radius: 0; padding: 11px 11px 46px; background: transparent; box-shadow: none; }
+    .asset-picker textarea:focus { border-color: transparent; box-shadow: none; }
+    .asset-toolbar { position: absolute; right: 9px; bottom: 8px; left: 11px; display: flex; align-items: center; justify-content: space-between; gap: 10px; pointer-events: none; }
+    .asset-hint { overflow: hidden; color: #777181; font-size: 10px; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+    .asset-choose { flex: none; border: 1px solid #cbc5de; border-radius: 6px; padding: 7px 9px; background: #F8F6F0; color: #322e40; cursor: pointer; font-size: 11px; font-weight: 700; pointer-events: auto; }
+    .asset-drop-label { position: absolute; inset: 0; display: none; place-items: center; background: rgba(247,245,255,.94); color: #3d31c8; font-size: 12px; font-weight: 700; pointer-events: none; }
+    .asset-picker.dragging .asset-drop-label { display: grid; }
     .asset-list { display: grid; gap: 7px; }
-    .asset-item { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; align-items: center; gap: 9px; border: 1px solid #ded9eb; border-radius: 7px; padding: 7px; background: white; }
-    .asset-thumb { width: 42px; height: 42px; object-fit: cover; border-radius: 5px; border: 1px solid #ebe7f4; background: #f2efe8; }
-    .asset-placeholder { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 5px; background: #f2efe8; color: #625e70; font-size: 10px; font-weight: 800; }
+    .asset-item { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; align-items: center; gap: 9px; border: 1px solid #ded9eb; border-radius: 6px; padding: 7px; background: white; }
+    .asset-thumb { width: 42px; height: 42px; object-fit: cover; border-radius: 6px; border: 1px solid #ebe7f4; background: #f2efe8; }
+    .asset-placeholder { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 6px; background: #f2efe8; color: #625e70; font-size: 10px; font-weight: 800; }
     .asset-copy { min-width: 0; }
     .asset-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #322e40; font-size: 11px; font-weight: 700; }
     .asset-meta { color: #777181; font-size: 10px; }
     .asset-remove { border: 0; background: transparent; color: #777181; cursor: pointer; padding: 5px; font-size: 16px; }
 
-    textarea { width: 100%; min-height: 126px; resize: vertical; border: 1px solid #cbc5de; border-radius: 8px; padding: 11px; background: white; color: #181622; outline: none; }
+    textarea { width: 100%; min-height: 126px; resize: vertical; border: 1px solid #cbc5de; border-radius: 6px; padding: 11px; background: white; color: #181622; outline: none; }
     textarea:focus { border-color: #2B160A; box-shadow: 0 0 0 3px rgba(91,75,255,.12); }
-    .actions { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; }
-    .primary, .secondary { border-radius: 4px; padding: 10px 12px; cursor: pointer; font-weight: 500; }
+    .actions { display: flex; gap: 8px; }
+    .actions .primary, .actions .secondary { flex: none; }
+    .primary, .secondary { border-radius: 6px; padding: 10px 16px; cursor: pointer; font-weight: 500; }
     .primary { border: 1px solid #2B160A; background: #2B160A; color: white; }
     .secondary { border: 1px solid white; background: white; color: #322e40; }
     .tertiary { border: 1px solid #cccac4; background: white; color: #322e40; padding: 3px 10px; cursor: pointer; font-weight: 500; }
     button:disabled { opacity: .45; cursor: not-allowed; }
     .message { min-height: 20px; margin: 0; color: #615b70; font-size: 12px; white-space: pre-wrap; }
     .message.error { color: #b3261e; }
-    .empty { border: 1px dashed #cbc5de; border-radius: 12px; padding: 18px; text-align: center; color: #6f6a7c; }
+    .empty { border: 1px dashed #cbc5de; border-radius: 6px; padding: 18px; text-align: center; color: #6f6a7c; }
     .model-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 2px; border-top: 1px solid #ebe7f4; }
     .model-row span { color: #777181; font-size: 11px; }
     .text-button { border: 0; background: transparent; color: #2B160A; padding: 5px 0; cursor: pointer; font-size: 11px; font-weight: 700; }
@@ -248,47 +254,116 @@ function boot(): void {
   const shadow = host.attachShadow({ mode: 'open' });
   shadow.innerHTML = `
     <style>${styles()}</style>
+
     <button class="launch" type="button" aria-label="Edit with Flock">
-    <img class="launch-logo" src="https://flock.today/images/flock_logo_pink.webp" alt="Flock">
+      <img
+        class="launch-logo"
+        src="https://flock.today/images/flock_logo_pink.webp"
+        alt="Flock"
+      >
     </button>
+
     <aside class="panel hidden" aria-label="Flock owner editor">
       <header>
-      <img
-        class="header-logo dev-toggle"
-        src="https://flock.today/images/flock_logo.webp"
-        alt="Flock"
-      />
+        <img
+          class="header-logo dev-toggle"
+          src="https://flock.today/images/flock_logo.webp"
+          alt="Flock"
+        />
 
-      <div class="header-actions">
-        <button class="icon close" type="button" aria-label="Close">×</button>
-      </div>
+        <h2 class="section-title"></h2>
+
+        <div class="header-actions">
+          <button class="icon close" type="button" aria-label="Close">×</button>
+        </div>
       </header>
+
       <div class="body">
         <div class="empty">No section selected.</div>
+
         <div class="section hidden">
-          <h2></h2>
           <img class="visual hidden" alt="Original Stitch section crop" />
-          <div class="asset-picker" role="button" tabindex="0" aria-label="Add PNG or SVG assets">
-            <input class="asset-input" type="file" accept=".png,.svg,image/png,image/svg+xml" multiple />
-            <div><span>Drop PNG or SVG files here · 5 MB max</span></div>
-            <button class="asset-choose" type="button">Upload</button>
+
+          <div class="asset-picker">
+            <input
+              class="asset-input"
+              type="file"
+              accept=".png,.svg,image/png,image/svg+xml"
+              multiple
+            />
+            <textarea
+              placeholder="Describe the change you want…"
+              aria-describedby="asset-upload-hint"
+            ></textarea>
+            <div class="asset-toolbar">
+              <span class="asset-hint" id="asset-upload-hint">Drop or paste PNG/SVG · 5 MB max</span>
+              <button class="asset-choose" type="button" aria-label="Upload PNG or SVG assets">
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 24 24"
+                  width="18"
+                  height="18"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 16V4" />
+                  <path d="m7 9 5-5 5 5" />
+                  <path d="M5 20h14" />
+                </svg>
+              </button>
+            </div>
+            <div class="asset-drop-label" aria-hidden="true">Drop files to attach</div>
           </div>
+
           <div class="asset-list"></div>
-          <textarea placeholder="Describe the change you want…"></textarea>
+
           <div class="actions">
             <button class="primary generate" type="button">Preview</button>
             <button class="secondary keep" type="button" disabled>Keep</button>
             <button class="secondary revert" type="button" disabled>Revert</button>
           </div>
+
           <p class="message"></p>
+
           <div class="status"></div>
-          <div class="model-row"><span class="provider-label">Local AI</span><div class="header-actions"><button class="text-button provider-toggle" type="button"Change model</button><button class="text-button remove-model" type="button">Clear local model</button></div></div>
+
+          <div class="model-row">
+            <span class="provider-label">Local AI</span>
+            <div class="header-actions">
+              <button class="text-button provider-toggle" type="button">
+                Change
+              </button>
+              <button class="text-button remove-model" type="button">
+                Clear
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </aside>
+
     <aside class="dev-panel hidden" aria-label="Flock model activity">
-      <header><strong>Diagnostics</strong><div class="header-actions"><button class="text-button copy-logs" type="button">Copy</button><button class="text-button clear-logs" type="button">Clear</button><button class="icon dev-close" type="button" aria-label="Close dev mode">×</button></div></header>
-      <div class="dev-log"><div class="dev-empty">No model activity yet.</div></div>
+      <header>
+        <strong>Diagnostics</strong>
+        <div class="header-actions">
+          <button class="text-button copy-logs" type="button">Copy</button>
+          <button class="text-button clear-logs" type="button">Clear</button>
+          <button
+            class="icon dev-close"
+            type="button"
+            aria-label="Close dev mode"
+          >
+            ×
+          </button>
+        </div>
+      </header>
+
+      <div class="dev-log">
+        <div class="dev-empty">No model activity yet.</div>
+      </div>
     </aside>
   `;
   document.documentElement.append(host);
@@ -305,7 +380,7 @@ function boot(): void {
   const status = shadow.querySelector<HTMLElement>('.status')!;
   const empty = shadow.querySelector<HTMLElement>('.empty')!;
   const sectionPanel = shadow.querySelector<HTMLElement>('.section')!;
-  const heading = shadow.querySelector<HTMLElement>('h2')!;
+  const heading = shadow.querySelector('.section-title');
   const visual = shadow.querySelector<HTMLImageElement>('.visual')!;
   const assetPicker = shadow.querySelector<HTMLElement>('.asset-picker')!;
   const assetInput = shadow.querySelector<HTMLInputElement>('.asset-input')!;
@@ -573,8 +648,10 @@ function boot(): void {
     assetPicker.classList.toggle('disabled', assetInput.disabled);
     assetPicker.setAttribute('aria-disabled', String(assetInput.disabled));
     generate.disabled = value || !selected || previewActive;
-    keep.disabled = value || !selected?.canRevert;
-    revert.disabled = value || !selected?.canRevert;
+    keep.classList.toggle('hidden', !previewActive);
+    revert.classList.toggle('hidden', !previewActive);
+    keep.disabled = value || !previewActive;
+    revert.disabled = value || !previewActive;
     devToggle.disabled = value;
     providerToggle.disabled = value;
     renderAssets();
@@ -583,7 +660,7 @@ function boot(): void {
 
   const renderProvider = (): void => {
     const openai = provider === 'openai';
-    providerToggle.textContent = openai ? 'Use local' : 'Change model';
+    providerToggle.textContent = openai ? 'Use local' : 'Change';
     providerLabel.textContent = openai
       ? `API${project?.inference?.openaiModel ? ` · ${project.inference.openaiModel}` : ''}`
       : 'Using local AI';
@@ -687,27 +764,36 @@ function boot(): void {
   const chooseAssets = (): void => {
     if (!assetInput.disabled) assetInput.click();
   };
-  assetChoose.addEventListener('click', (event) => {
-    event.stopPropagation();
-    chooseAssets();
-  });
-  assetPicker.addEventListener('click', chooseAssets);
-  assetPicker.addEventListener('keydown', (event) => {
-    if (event.key !== 'Enter' && event.key !== ' ') return;
+  assetChoose.addEventListener('click', chooseAssets);
+  let assetDragDepth = 0;
+  assetPicker.addEventListener('dragenter', (event) => {
+    if (assetInput.disabled || !event.dataTransfer?.types.includes('Files')) return;
     event.preventDefault();
-    chooseAssets();
-  });
-  assetPicker.addEventListener('dragover', (event) => {
-    if (assetInput.disabled) return;
-    event.preventDefault();
+    assetDragDepth += 1;
     assetPicker.classList.add('dragging');
   });
-  assetPicker.addEventListener('dragleave', () => assetPicker.classList.remove('dragging'));
+  assetPicker.addEventListener('dragover', (event) => {
+    if (assetInput.disabled || !event.dataTransfer?.types.includes('Files')) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+  });
+  assetPicker.addEventListener('dragleave', () => {
+    assetDragDepth = Math.max(0, assetDragDepth - 1);
+    if (!assetDragDepth) assetPicker.classList.remove('dragging');
+  });
   assetPicker.addEventListener('drop', (event) => {
+    assetDragDepth = 0;
     assetPicker.classList.remove('dragging');
     if (assetInput.disabled) return;
     event.preventDefault();
     addAssetFiles(event.dataTransfer ? [...event.dataTransfer.files] : []);
+  });
+  textarea.addEventListener('paste', (event) => {
+    if (assetInput.disabled) return;
+    const files = [...(event.clipboardData?.files ?? [])];
+    if (!files.length) return;
+    event.preventDefault();
+    addAssetFiles(files);
   });
   assetInput.addEventListener('change', () => {
     addAssetFiles([...(assetInput.files ?? [])]);
