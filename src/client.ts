@@ -78,14 +78,16 @@ function styles(): string {
     * { box-sizing: border-box; }
     button, textarea, input { font: inherit; }
     button { -webkit-tap-highlight-color: transparent; }
-    .launch { position: fixed; right: 18px; bottom: 18px; z-index: 2147483647; border: 0; border-radius: 8px; padding: 12px 17px; background: #2B160A; color: white; box-shadow: 0 12px 40px rgba(0,0,0,.28); cursor: pointer; font: 650 14px/1 system-ui, sans-serif; }
-    .panel, .dev-panel { position: fixed; bottom: 14px; z-index: 2147483647; height: 600px; display: flex; flex-direction: column; background: #F8F6F0; border-radius: 8px; box-shadow: 0 24px 80px rgba(22,18,45,.3); overflow: hidden; font: 14px/1.45 system-ui, sans-serif; color: #181622; }
+    .launch { position: fixed; right: 18px; bottom: 18px; display: flex; align-items: center; justify-content: center; width: 56px; height: 56px; padding: 0; border: 0; border-radius: 6px; background: #2B160A; cursor: pointer; box-shadow: 0 12px 40px rgba(0,0,0,.28); }
+    .launch-logo { width: 34px; height: 34px; object-fit: contain; pointer-events: none; }
+    .panel, .dev-panel { position: fixed; bottom: 14px; z-index: 2147483647; height: 600px; display: flex; flex-direction: column; background: #F8F6F0; border-radius: 6px; box-shadow: 0 24px 80px rgba(22,18,45,.3); overflow: hidden; font: 14px/1.45 system-ui, sans-serif; color: #181622; }
     .panel { right: 14px; width: min(410px, calc(100vw - 28px)); }
     .dev-panel { right: 438px; width: min(560px, calc(100vw - 466px)); }
     .hidden { display: none !important; }
     header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 15px 16px; border-bottom: 1px solid #e6e2f2; }
     header strong { font-size: 15px; }
     .header-actions { display: flex; align-items: center; gap: 12px; }
+    .header-logo { height: 30px; width: auto; display: block; }
     .icon { border: 0; background: transparent; color: #625e70; cursor: pointer; padding: 4px; font-size: 20px; }
     .body { padding: 16px; overflow: auto; display: grid; gap: 14px; }
     .status { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -117,7 +119,8 @@ function styles(): string {
     .actions { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; }
     .primary, .secondary { border-radius: 4px; padding: 10px 12px; cursor: pointer; font-weight: 500; }
     .primary { border: 1px solid #2B160A; background: #2B160A; color: white; }
-    .secondary { border: 1px solid #cbc5de; background: white; color: #322e40; }
+    .secondary { border: 1px solid white; background: white; color: #322e40; }
+    .tertiary { border: 1px solid #cccac4; background: white; color: #322e40; padding: 3px 10px; cursor: pointer; font-weight: 500; }
     button:disabled { opacity: .45; cursor: not-allowed; }
     .message { min-height: 20px; margin: 0; color: #615b70; font-size: 12px; white-space: pre-wrap; }
     .message.error { color: #b3261e; }
@@ -245,25 +248,30 @@ function boot(): void {
   const shadow = host.attachShadow({ mode: 'open' });
   shadow.innerHTML = `
     <style>${styles()}</style>
-    <button class="launch" type="button">Edit with Flock</button>
+    <button class="launch" type="button" aria-label="Edit with Flock">
+    <img class="launch-logo" src="https://flock.today/images/flock_logo_pink.webp" alt="Flock">
+    </button>
     <aside class="panel hidden" aria-label="Flock owner editor">
       <header>
-        <strong>Editing</strong>
-        <div class="header-actions">
-          <button class="text-button dev-toggle" type="button" aria-pressed="false">Dev mode</button>
-          <button class="icon close" type="button" aria-label="Close">×</button>
-        </div>
+      <img
+        class="header-logo dev-toggle"
+        src="https://flock.today/images/flock_logo.webp"
+        alt="Flock"
+      />
+
+      <div class="header-actions">
+        <button class="icon close" type="button" aria-label="Close">×</button>
+      </div>
       </header>
       <div class="body">
-        <p class="hint">Select a section and describe your changes.</p>
         <div class="empty">No section selected.</div>
         <div class="section hidden">
           <h2></h2>
           <img class="visual hidden" alt="Original Stitch section crop" />
           <div class="asset-picker" role="button" tabindex="0" aria-label="Add PNG or SVG assets">
             <input class="asset-input" type="file" accept=".png,.svg,image/png,image/svg+xml" multiple />
-            <div><strong>Add assets</strong><span>Drop PNG or SVG files here · 5 MB max</span></div>
-            <button class="asset-choose" type="button">Choose</button>
+            <div><span>Drop PNG or SVG files here · 5 MB max</span></div>
+            <button class="asset-choose" type="button">Upload</button>
           </div>
           <div class="asset-list"></div>
           <textarea placeholder="Describe the change you want…"></textarea>
@@ -274,12 +282,12 @@ function boot(): void {
           </div>
           <p class="message"></p>
           <div class="status"></div>
-          <div class="model-row"><span class="provider-label">Local AI</span><div class="header-actions"><button class="text-button provider-toggle" type="button">Use OpenAI</button><button class="text-button remove-model" type="button">Clear local model</button></div></div>
+          <div class="model-row"><span class="provider-label">Local AI</span><div class="header-actions"><button class="text-button provider-toggle" type="button"Change model</button><button class="text-button remove-model" type="button">Clear local model</button></div></div>
         </div>
       </div>
     </aside>
     <aside class="dev-panel hidden" aria-label="Flock model activity">
-      <header><strong>Flock diagnostics</strong><div class="header-actions"><button class="text-button copy-logs" type="button">Copy</button><button class="text-button clear-logs" type="button">Clear</button><button class="icon dev-close" type="button" aria-label="Close dev mode">×</button></div></header>
+      <header><strong>Diagnostics</strong><div class="header-actions"><button class="text-button copy-logs" type="button">Copy</button><button class="text-button clear-logs" type="button">Clear</button><button class="icon dev-close" type="button" aria-label="Close dev mode">×</button></div></header>
       <div class="dev-log"><div class="dev-empty">No model activity yet.</div></div>
     </aside>
   `;
@@ -575,10 +583,10 @@ function boot(): void {
 
   const renderProvider = (): void => {
     const openai = provider === 'openai';
-    providerToggle.textContent = openai ? 'Use local' : 'Use OpenAI';
+    providerToggle.textContent = openai ? 'Use local' : 'Change model';
     providerLabel.textContent = openai
       ? `API${project?.inference?.openaiModel ? ` · ${project.inference.openaiModel}` : ''}`
-      : 'Local AI';
+      : 'Using local AI';
     removeModel.classList.toggle('hidden', openai);
   };
 
@@ -596,16 +604,6 @@ function boot(): void {
     if (project) project.sections = project.sections.map((item) => item.id === section.id ? section : item);
     sessionStorage.setItem(SECTION_KEY, section.id);
     renderSection();
-  };
-
-  const renderStatus = (): void => {
-    if (!project) return;
-    const values = [
-      project.stitchRunStatus && `Stitch: ${project.stitchRunStatus}`,
-      project.projectionStatus && `Projection: ${project.projectionStatus}`,
-      project.publicationStatus && `Publication: ${project.publicationStatus}`,
-    ].filter(Boolean) as string[];
-    status.innerHTML = values.map((value) => `<span class="badge">${escapeHtml(value)}</span>`).join('');
   };
 
   const renderSection = (): void => {
@@ -629,7 +627,6 @@ function boot(): void {
     project = await jsonFetch<FlockProjectSummary>(`${API}/project`, undefined, devMode ? appendDevLog : undefined);
     const storedId = sessionStorage.getItem(SECTION_KEY);
     selected = project.sections.find((section) => section.id === storedId);
-    renderStatus();
     renderProvider();
     renderSection();
   };
